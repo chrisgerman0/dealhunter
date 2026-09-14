@@ -15,7 +15,7 @@ export function MiniMap({ coords, label }: { coords: Coords; label?: string }) {
     let map: import("maplibre-gl").Map | null = null;
     (async () => {
       try {
-        const maplibregl = (await import("maplibre-gl")).default;
+        const maplibregl = await import("maplibre-gl");
         await import("maplibre-gl/dist/maplibre-gl.css");
         if (!ref.current) return;
         map = new maplibregl.Map({

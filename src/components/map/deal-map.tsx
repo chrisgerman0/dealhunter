@@ -29,7 +29,7 @@ export function DealMap({ deals }: DealMapProps) {
 
     (async () => {
       try {
-        const maplibregl = (await import("maplibre-gl")).default;
+        const maplibregl = await import("maplibre-gl");
         await import("maplibre-gl/dist/maplibre-gl.css");
         if (cancelled || !mapContainer.current) return;
 
@@ -61,7 +61,7 @@ export function DealMap({ deals }: DealMapProps) {
     if (!ready || !mapRef.current) return;
 
     (async () => {
-      const maplibregl = (await import("maplibre-gl")).default;
+      const maplibregl = await import("maplibre-gl");
       const map = mapRef.current!;
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
