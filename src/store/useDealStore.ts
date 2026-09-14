@@ -70,7 +70,7 @@ const defaultFilters: Filters = {
   maxBeds: 4,
   tenure: "freehold",
   qualities: ["excellent", "good", "marginal"],
-  maxCashIn: 50000,
+  maxCashIn: null,  // null = no cash-in cap; capital still drives JV tags
   freeholdOnly: true,
 };
 
@@ -132,7 +132,6 @@ export const useDealStore = create<DealStore>()(
           const settings = { ...s.settings, ...partial };
           const filters = {
             ...s.filters,
-            ...(partial.capital != null ? { maxCashIn: partial.capital } : {}),
             ...(partial.defaultCities ? { cities: partial.defaultCities } : {}),
             ...(partial.freeholdOnly != null
               ? {
@@ -157,7 +156,7 @@ export const useDealStore = create<DealStore>()(
             cities: settings.defaultCities,
             minPrice: settings.minPrice,
             maxPrice: settings.maxPrice,
-            maxCashIn: settings.capital,
+            maxCashIn: null,
             freeholdOnly: settings.freeholdOnly,
             tenure: settings.freeholdOnly ? "freehold" : "any",
           },
@@ -179,6 +178,15 @@ export const useDealStore = create<DealStore>()(
     }),
     {
       name: "dealhunter-store",
+      version: 2,
+      migrate: (persisted: unknown) => {
+        const state = persisted as { filters?: { maxCashIn?: number | null } } | undefined;
+        if (state?.filters && state.filters.maxCashIn != null && state.filters.maxCashIn <= 60000) {
+          // Old default (£50k) hid almost all BRRR deals — treat as "Any"
+          state.filters.maxCashIn = null;
+        }
+        return state as never;
+      },
       partialize: (s) => ({
         shortlisted: s.shortlisted,
         dismissed: s.dismissed,

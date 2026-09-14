@@ -3,8 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Coords } from "@/types/deal";
 import { MapPin } from "lucide-react";
-
-const FREE_STYLE = "https://tiles.openfreemap.org/styles/liberty";
+import { FREE_MAP_STYLE } from "@/lib/map-style";
 
 export function MiniMap({ coords, label }: { coords: Coords; label?: string }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -20,7 +19,7 @@ export function MiniMap({ coords, label }: { coords: Coords; label?: string }) {
         if (!ref.current) return;
         map = new maplibregl.Map({
           container: ref.current,
-          style: FREE_STYLE,
+          style: FREE_MAP_STYLE,
           center: [coords.lng, coords.lat],
           zoom: 13,
           interactive: false,

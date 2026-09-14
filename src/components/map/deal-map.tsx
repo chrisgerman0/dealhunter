@@ -5,13 +5,11 @@ import type { Deal } from "@/types/deal";
 import { useDealStore } from "@/store/useDealStore";
 import { MapFallback } from "./map-fallback";
 import { formatGBP } from "@/lib/format";
+import { FREE_MAP_STYLE } from "@/lib/map-style";
 
 interface DealMapProps {
   deals: Deal[];
 }
-
-/** Free vector basemap — no API key required (OpenFreeMap / OSM data). */
-const FREE_STYLE = "https://tiles.openfreemap.org/styles/liberty";
 
 export function DealMap({ deals }: DealMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -35,16 +33,18 @@ export function DealMap({ deals }: DealMapProps) {
 
         const map = new maplibregl.Map({
           container: mapContainer.current,
-          style: FREE_STYLE,
+          style: FREE_MAP_STYLE,
           center: [-2.6, 53.45],
           zoom: 9.2,
         });
         map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
         mapRef.current = map;
-        map.on("load", () => setReady(true));
-        map.on("error", () => setError(true));
+        map.on("load", () => {
+          if (!cancelled) setReady(true);
+        });
+        // Do not treat tile/network blips as fatal — only hard init failures use fallback
       } catch {
-        setError(true);
+        if (!cancelled) setError(true);
       }
     })();
 

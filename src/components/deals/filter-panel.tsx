@@ -187,16 +187,18 @@ export function FilterPanel() {
         </div>
         <Slider
           min={10000}
-          max={Math.max(capital * 2, 100000)}
+          max={150000}
           step={2500}
-          value={[filters.maxCashIn ?? capital]}
+          value={[filters.maxCashIn ?? 150000]}
           onValueChange={(v) => {
             const val = v as number[];
-            setFilters({ maxCashIn: val[0] });
+            // Top of slider = no hard cap ("Any")
+            setFilters({ maxCashIn: val[0] >= 150000 ? null : val[0] });
           }}
         />
         <p className="text-[11px] text-muted-foreground">
-          Based on your capital setting ({formatGBP(capital)}). Deals above this are tagged JV.
+          Optional hard filter. Your capital ({formatGBP(capital)}) still drives Solo / JV tags.
+          Slide to max for Any.
         </p>
       </div>
     </aside>
