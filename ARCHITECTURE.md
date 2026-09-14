@@ -99,4 +99,4 @@ No auth — personal-use prototype.
 
 ## Maps
 
-`DealMap` / `MiniMap` dynamic-import Mapbox GL when `NEXT_PUBLIC_MAPBOX_TOKEN` is set. Otherwise `MapFallback` plots pins on a schematic Liverpool–Manchester canvas so the UX never hard-fails.
+`DealMap` / `MiniMap` use MapLibre GL with a free OpenFreeMap style (OSM data) — no API key. `MapFallback` is only used if the basemap fails to load.

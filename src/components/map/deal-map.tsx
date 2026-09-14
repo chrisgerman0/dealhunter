@@ -10,37 +10,39 @@ interface DealMapProps {
   deals: Deal[];
 }
 
+/** Free vector basemap — no API key required (OpenFreeMap / OSM data). */
+const FREE_STYLE = "https://tiles.openfreemap.org/styles/liberty";
+
 export function DealMap({ deals }: DealMapProps) {
-  const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
   const mapContainer = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<import("mapbox-gl").Map | null>(null);
-  const markersRef = useRef<import("mapbox-gl").Marker[]>([]);
+  const mapRef = useRef<import("maplibre-gl").Map | null>(null);
+  const markersRef = useRef<import("maplibre-gl").Marker[]>([]);
   const selectedDealId = useDealStore((s) => s.selectedDealId);
   const setSelectedDealId = useDealStore((s) => s.setSelectedDealId);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    if (!token || !mapContainer.current) return;
+    if (!mapContainer.current) return;
 
     let cancelled = false;
 
     (async () => {
       try {
-        const mapboxgl = (await import("mapbox-gl")).default;
-        await import("mapbox-gl/dist/mapbox-gl.css");
+        const maplibregl = (await import("maplibre-gl")).default;
+        await import("maplibre-gl/dist/maplibre-gl.css");
         if (cancelled || !mapContainer.current) return;
 
-        mapboxgl.accessToken = token;
-        const map = new mapboxgl.Map({
+        const map = new maplibregl.Map({
           container: mapContainer.current,
-          style: "mapbox://styles/mapbox/light-v11",
+          style: FREE_STYLE,
           center: [-2.6, 53.45],
           zoom: 9.2,
         });
-        map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
+        map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
         mapRef.current = map;
         map.on("load", () => setReady(true));
+        map.on("error", () => setError(true));
       } catch {
         setError(true);
       }
@@ -53,13 +55,13 @@ export function DealMap({ deals }: DealMapProps) {
       mapRef.current?.remove();
       mapRef.current = null;
     };
-  }, [token]);
+  }, []);
 
   useEffect(() => {
-    if (!ready || !mapRef.current || !token) return;
+    if (!ready || !mapRef.current) return;
 
     (async () => {
-      const mapboxgl = (await import("mapbox-gl")).default;
+      const maplibregl = (await import("maplibre-gl")).default;
       const map = mapRef.current!;
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
@@ -79,19 +81,19 @@ export function DealMap({ deals }: DealMapProps) {
         el.title = `${deal.address} · ${formatGBP(deal.price)}`;
         el.addEventListener("click", () => setSelectedDealId(deal.id));
 
-        const marker = new mapboxgl.Marker({ element: el })
+        const marker = new maplibregl.Marker({ element: el })
           .setLngLat([deal.coords.lng, deal.coords.lat])
           .addTo(map);
         markersRef.current.push(marker);
       });
 
       if (deals.length > 0) {
-        const bounds = new mapboxgl.LngLatBounds();
+        const bounds = new maplibregl.LngLatBounds();
         deals.forEach((d) => bounds.extend([d.coords.lng, d.coords.lat]));
         map.fitBounds(bounds, { padding: 48, maxZoom: 12 });
       }
     })();
-  }, [deals, ready, selectedDealId, setSelectedDealId, token]);
+  }, [deals, ready, selectedDealId, setSelectedDealId]);
 
   useEffect(() => {
     if (!ready || !mapRef.current || !selectedDealId) return;
@@ -104,7 +106,7 @@ export function DealMap({ deals }: DealMapProps) {
     });
   }, [selectedDealId, deals, ready]);
 
-  if (!token || error) {
+  if (error) {
     return <MapFallback deals={deals} />;
   }
 

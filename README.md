@@ -33,7 +33,7 @@ npm start
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `NEXT_PUBLIC_MAPBOX_TOKEN` | No | Mapbox access token. Without it, Explore and deal detail show a graceful schematic / static fallback. |
+| *(none for maps)* | — | Maps use MapLibre + free OpenFreeMap/OSM tiles — no token required. |
 | `DATA_SOURCE` | No | `mock` (default), `rightmove`, or `zoopla`. Non-mock classes are stubs and throw until implemented. |
 
 ## Key routes
@@ -76,7 +76,7 @@ If the repo already exists and is empty, the same push works after adding the re
 
 1. Import `chrisgerman0/dealhunter` in the Vercel dashboard (or `vercel` CLI).
 2. Framework preset: Next.js.
-3. Add `NEXT_PUBLIC_MAPBOX_TOKEN` in Project → Settings → Environment Variables.
+3. No map token needed. Add other secrets later under Project → Settings → Environment Variables.
 4. Deploy. App Router works with zero config.
 
 ```bash

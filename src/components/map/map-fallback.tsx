@@ -6,11 +6,11 @@ import { formatGBP } from "@/lib/format";
 import { MapPin } from "lucide-react";
 import { QualityBadge } from "@/components/deals/quality-badge";
 
+/** Schematic fallback only if the live MapLibre basemap fails to load. */
 export function MapFallback({ deals }: { deals: Deal[] }) {
   const selectedDealId = useDealStore((s) => s.selectedDealId);
   const setSelectedDealId = useDealStore((s) => s.setSelectedDealId);
 
-  // Project lat/lng into a simple 2D plot for Liverpool + Manchester corridor
   const project = (lat: number, lng: number) => {
     const minLat = 53.35, maxLat = 53.55;
     const minLng = -3.05, maxLng = -2.1;
@@ -22,8 +22,7 @@ export function MapFallback({ deals }: { deals: Deal[] }) {
   return (
     <div className="relative flex h-full min-h-[280px] flex-col bg-gradient-to-br from-slate-100 to-slate-200">
       <div className="border-b bg-amber-50 px-3 py-2 text-xs text-amber-900">
-        Mapbox token missing — showing schematic plot. Add{" "}
-        <code className="rounded bg-amber-100 px-1">NEXT_PUBLIC_MAPBOX_TOKEN</code> to enable the live map.
+        Live map unavailable — showing schematic Liverpool–Manchester plot.
       </div>
       <div className="relative flex-1 overflow-hidden">
         <div className="absolute left-[8%] top-[35%] text-[10px] font-semibold uppercase tracking-wider text-slate-400">
