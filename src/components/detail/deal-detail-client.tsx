@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import type { Deal } from "@/types/deal";
 import { formatGBP, capitalTagFromCashIn } from "@/lib/format";
 import { PhotoGallery } from "./photo-gallery";
@@ -17,11 +18,41 @@ import { cn } from "@/lib/utils";
 
 export function DealDetailClient({ deal: raw }: { deal: Deal }) {
   const capital = useDealStore((s) => s.settings.capital);
-  const deal = { ...raw, capitalTag: capitalTagFromCashIn(raw.cashInBase, capital) };
+  const [dealData, setDealData] = useState<Deal>(raw);
+  const [enrichState, setEnrichState] = useState<"loading" | "ready" | "error">("loading");
+  const deal = { ...dealData, capitalTag: capitalTagFromCashIn(dealData.cashInBase, capital) };
   const toggleShortlist = useDealStore((s) => s.toggleShortlist);
   const dismiss = useDealStore((s) => s.dismiss);
   const snooze = useDealStore((s) => s.snooze);
   const isShortlisted = useDealStore((s) => s.isShortlisted(deal.id));
+
+  useEffect(() => {
+    const ac = new AbortController();
+    setDealData(raw);
+    setEnrichState("loading");
+    fetch(`/api/deals/${raw.id}/enrich`, { signal: ac.signal, cache: "no-store" })
+      .then((res) => {
+        if (!res.ok) throw new Error(`Enrich failed (${res.status})`);
+        return res.json() as Promise<Deal>;
+      })
+      .then((enriched) => {
+        setDealData(enriched);
+        setEnrichState("ready");
+      })
+      .catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setEnrichState("error");
+        setDealData((current) => ({
+          ...current,
+          enrichment: {
+            crime: { status: "mock-fallback", updatedAt: null, note: "Live crime lookup failed" },
+            flood: { status: "mock-fallback", updatedAt: null, note: "Live flood lookup failed" },
+            comps: { status: "mock-fallback", updatedAt: null, note: "Live comps lookup failed" },
+          },
+        }));
+      });
+    return () => ac.abort();
+  }, [raw]);
 
   return (
     <div className="px-4 py-6">
@@ -34,6 +65,17 @@ export function DealDetailClient({ deal: raw }: { deal: Deal }) {
           Back to Explore
         </Link>
       </div>
+
+      {enrichState === "loading" && (
+        <p className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+          Refreshing live crime, flood and sold-comps layers…
+        </p>
+      )}
+      {enrichState === "error" && (
+        <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Could not refresh live data — showing modelled layers.
+        </p>
+      )}
 
       <div className="grid gap-8 lg:grid-cols-[1.4fr_1fr]">
         <div className="space-y-6">
@@ -102,7 +144,15 @@ export function DealDetailClient({ deal: raw }: { deal: Deal }) {
               <Clock className="size-4" />
               Snooze
             </Button>
-            <a href={deal.listingUrl} target="_blank" rel="noreferrer" className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-secondary px-3 text-sm font-medium text-secondary-foreground hover:bg-secondary/80"><ExternalLink className="size-4" />View listing</a>
+            <a
+              href={deal.listingUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-secondary px-3 text-sm font-medium text-secondary-foreground hover:bg-secondary/80"
+            >
+              <ExternalLink className="size-4" />
+              View listing
+            </a>
           </div>
 
           <MiniMap coords={deal.coords} label={deal.address} />

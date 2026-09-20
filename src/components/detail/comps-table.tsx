@@ -28,11 +28,14 @@ export function CompsTable({ comps }: { comps: Comp[] }) {
             <TableRow key={`${c.address}-${i}`}>
               <TableCell className="font-medium">
                 <div>{c.address}</div>
-                <div className="text-xs text-muted-foreground">{c.postcode}</div>
+                <div className="text-xs text-muted-foreground">
+                  {c.postcode}
+                  {c.propertyType ? ` · ${c.propertyType}` : ""}
+                </div>
               </TableCell>
               <TableCell>{c.soldDate}</TableCell>
-              <TableCell>{c.beds}</TableCell>
-              <TableCell>{c.sqft.toLocaleString("en-GB")}</TableCell>
+              <TableCell>{c.beds > 0 ? c.beds : "n/a"}</TableCell>
+              <TableCell>{c.sqft > 0 ? c.sqft.toLocaleString("en-GB") : "n/a"}</TableCell>
               <TableCell>{formatGBP(c.price)}</TableCell>
               <TableCell>{c.distanceMiles.toFixed(2)} mi</TableCell>
             </TableRow>

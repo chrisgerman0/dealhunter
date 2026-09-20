@@ -11,6 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { CompsTable } from "./comps-table";
 import { FinancialModel } from "./financial-model";
+import { LiveBadge } from "./live-badge";
 import {
   Home,
   Shapes,
@@ -83,9 +84,10 @@ export function VettingLayers({ deal }: { deal: Deal }) {
 
       <AccordionItem value="comps">
         <AccordionTrigger>
-          <span className="flex items-center gap-2">
+          <span className="flex flex-wrap items-center gap-2">
             <PoundSterling className="size-4 text-emerald-600" />
             3. Sold comps
+            <LiveBadge meta={deal.enrichment?.comps} />
           </span>
         </AccordionTrigger>
         <AccordionContent className="space-y-3">
@@ -96,6 +98,14 @@ export function VettingLayers({ deal }: { deal: Deal }) {
             <Row label="GDV stretch" value={formatGBP(layers.soldComps.gdvStretch)} />
             <Row label="GDV conservative" value={formatGBP(layers.soldComps.gdvConservative)} />
           </dl>
+          {layers.soldComps.thinSample && (
+            <p className="text-sm text-amber-800">
+              Thin sample — modelled GDV bands kept. Price Paid Data does not record bedroom counts.
+            </p>
+          )}
+          {layers.soldComps.sourceNote && (
+            <p className="text-xs text-muted-foreground">{layers.soldComps.sourceNote}</p>
+          )}
           <CompsTable comps={layers.soldComps.comps} />
         </AccordionContent>
       </AccordionItem>
@@ -167,12 +177,13 @@ export function VettingLayers({ deal }: { deal: Deal }) {
 
       <AccordionItem value="regulatory">
         <AccordionTrigger>
-          <span className="flex items-center gap-2">
+          <span className="flex flex-wrap items-center gap-2">
             <ShieldAlert className="size-4 text-emerald-600" />
             7. Regulatory flags
             {layers.regulatory.flags.length > 0 && (
               <Badge variant="destructive">{layers.regulatory.flags.length}</Badge>
             )}
+            <LiveBadge meta={deal.enrichment?.flood} />
           </span>
         </AccordionTrigger>
         <AccordionContent className="space-y-2">
@@ -182,7 +193,13 @@ export function VettingLayers({ deal }: { deal: Deal }) {
             <Row label="Additional HMO" value={yn(layers.regulatory.additionalHmo)} />
             <Row label="Conservation" value={yn(layers.regulatory.conservation)} />
             <Row label="Flood zone" value={String(layers.regulatory.floodZone)} />
+            {layers.regulatory.floodRisk && (
+              <Row label="Flood risk" value={layers.regulatory.floodRisk} />
+            )}
           </dl>
+          {deal.enrichment?.flood?.note && (
+            <p className="text-xs text-muted-foreground">{deal.enrichment.flood.note}</p>
+          )}
           {layers.regulatory.flags.length > 0 ? (
             <div className="flex flex-wrap gap-1">
               {layers.regulatory.flags.map((f) => (
@@ -192,17 +209,18 @@ export function VettingLayers({ deal }: { deal: Deal }) {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">No major flags on mock data.</p>
+            <p className="text-sm text-muted-foreground">No major flags on file.</p>
           )}
         </AccordionContent>
       </AccordionItem>
 
       <AccordionItem value="risk">
         <AccordionTrigger>
-          <span className="flex items-center gap-2">
+          <span className="flex flex-wrap items-center gap-2">
             <AlertTriangle className="size-4 text-emerald-600" />
             8. Risk & motivation
             <Badge variant="secondary">{layers.risk.dealQualityScore}/10</Badge>
+            <LiveBadge meta={deal.enrichment?.crime} />
           </span>
         </AccordionTrigger>
         <AccordionContent className="space-y-3">
@@ -211,6 +229,12 @@ export function VettingLayers({ deal }: { deal: Deal }) {
             <Row label="Price reductions" value={String(layers.risk.priceReductions)} />
             <Row label="Auction" value={yn(layers.risk.auction)} />
             <Row label="Crime score" value={`${layers.risk.crimeScore}/10`} />
+            {layers.risk.burglaryPer1000 != null && (
+              <Row label="Burglary / 1,000" value={String(layers.risk.burglaryPer1000)} />
+            )}
+            {layers.risk.asbPer1000 != null && (
+              <Row label="ASB / 1,000" value={String(layers.risk.asbPer1000)} />
+            )}
             <Row label="Ofsted" value={layers.risk.ofstedRating} />
             <Row label="Transport" value={`${layers.risk.transportScore}/10`} />
             <Row label="Green space" value={`${layers.risk.greenSpaceScore}/10`} />
