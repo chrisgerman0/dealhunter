@@ -2,7 +2,7 @@
 
 Personal-use UK BMV (below market value) deal hunter focused on **Liverpool** and **Manchester**. Find terraces that can add a bedroom via internal reconfiguration, then model a **BRRR** refinance (Bridge vs Cash+refi).
 
-This repository is a polished **Next.js 14 frontend MVP**. Listings are still mock (Rightmove/Zoopla have no personal API). **Crime, flood and sold-comps layers use live free UK APIs.**
+This repository is a polished **Next.js 14 frontend MVP**. Listings are still mock (Rightmove/Zoopla have no personal API — do not scrape). **Sold comps / GDV come from live Land Registry Price Paid.** Flood zone is a light extra. Crime is not used for buying decisions.
 
 ## Stack
 
@@ -34,8 +34,9 @@ npm start
 | Variable | Required | Description |
 |----------|----------|-------------|
 | *(none for maps)* | — | Maps use MapLibre + free Esri street tiles — no token required. |
-| `DATA_SOURCE` | No | `mock` (default), `rightmove`, `zoopla`, or `propertydata`. Non-mock listing classes are stubs until keyed. |
-| `PROPERTYDATA_API_KEY` | No | For a future listings integration only. Not used yet. |
+| `DATA_SOURCE` | No | `mock` (default) or `propertydata` when keyed. `rightmove` / `zoopla` stubs throw — do not scrape. |
+| `PROPERTYDATA_API_KEY` | No | Enables `GET /api/listings/search` against PropertyData `/sourced-properties`. |
+| `PROPERTYDATA_LISTS` | No | Comma-separated sourcing lists (default `unmodernised-properties,reduced-properties`). |
 
 No paid keys are required for live enrichment.
 
@@ -47,35 +48,33 @@ No paid keys are required for live enrichment.
 | `/deals/[id]` | Deal detail — gallery, 8 vetting layers, finance model; fetches live enrichment on load |
 | `/shortlist` | Shortlist + side-by-side comparison |
 | `/settings` | Capital and search defaults |
-| `GET /api/enrich/crime?lat=&lng=` | police.uk street-level crime → `CrimeData` |
-| `GET /api/enrich/flood?lat=&lng=` | Environment Agency flood zones → `FloodData` |
-| `GET /api/enrich/comps?postcode=&beds=` | Land Registry Price Paid sold comps + GDV bands |
-| `GET /api/deals/[id]/enrich` | Merges live crime / flood / comps into the deal JSON |
+| `GET /api/enrich/comps?postcode=&beds=` | Land Registry Price Paid sold comps + GDV bands (median / p75 / p25) |
+| `GET /api/enrich/flood?lat=&lng=` | Environment Agency flood zones (optional) |
+| `GET /api/deals/[id]/enrich` | Merges live comps (and flood) into the deal JSON |
+| `GET /api/listings/search` | Mock listings until `PROPERTYDATA_API_KEY` is set; then PropertyData sourced-properties |
 
 ## Live enrichment (free official APIs)
 
 | Layer | Source | Notes |
 |-------|--------|-------|
-| Sold comps / GDV bands | [HM Land Registry Price Paid](https://landregistry.data.gov.uk/) SPARQL + Linked Data REST | No bedroom or sqft fields. Nearby postcodes via [postcodes.io](https://api.postcodes.io). GDV median / p75 stretch / p25 conservative when sample ≥ 3; otherwise modelled GDV is kept and labelled thin. |
-| Crime | [police.uk](https://data.police.uk/docs/method/crime-street/) street-level `all-crime` | Latest published month, ~1 mile radius. Score 1–10 (lower is safer). |
-| Flood | [EA Flood Map for Planning](https://environment.data.gov.uk/spatialdata/flood-map-for-planning-flood-zones/ogc/features/v1) OGC Features (ArcGIS fallback) | Zone 1/2/3 mapped to low/medium/high. |
+| **Sold comps / GDV** (primary) | [HM Land Registry Price Paid](https://landregistry.data.gov.uk/) SPARQL + Linked Data REST | Nearby postcodes via [postcodes.io](https://api.postcodes.io). Median = realistic GDV; 75th = stretch; 25th = conservative. Sample &lt; 3 keeps modelled GDV and is labelled thin. No bedroom/sqft in Price Paid. |
+| Flood (optional) | [EA Flood Map for Planning](https://environment.data.gov.uk/spatialdata/flood-map-for-planning-flood-zones/ogc/features/v1) | Zone 1/2/3 → low/medium/high. |
 
-Responses are cached in memory for **12h (crime)** or **24h (flood, comps, postcodes)**. Upstream fetches abort after **~8 seconds** so Vercel serverless does not hang.
+Responses are cached in memory for **24h**. Upstream fetches abort after **~8 seconds**. Land Registry SPARQL is a shared public endpoint — do not hammer it from batch jobs.
 
-Be polite with rate limits: police.uk asks for a descriptive User-Agent (we send one); Land Registry SPARQL is a shared public endpoint — do not hammer it from batch jobs. postcodes.io is free with fair-use limits.
+Deal detail shows asking vs live GDV in plain English so a first-time buyer can see whether the price is actually below nearby sold prices, plus whether a 75% refinance of that GDV would cover asking.
 
 ## Where to plug real listing APIs
 
 Listings stay mock until a keyed provider is added. **Do not scrape Rightmove or Zoopla.**
 
-### Adding PropertyData later
+### Adding PropertyData
 
-1. Create an account and API key at [PropertyData](https://propertydata.co.uk/) (or similar: Ideal Postcodes, a licensed listings feed).
-2. Set `PROPERTYDATA_API_KEY` in Vercel → Project → Environment Variables.
-3. Implement `searchListings` and `getListingDetail` in `src/lib/data-sources/propertydata.ts`.
-4. Keep using `src/lib/enrich/` for crime, flood and sold comps — those clients are already live and key-free.
-5. Set `DATA_SOURCE=propertydata` (factory already accepts this kind).
-6. Assemble listing → `Deal` on the server, then run `enrichDeal()` (same helper as `GET /api/deals/[id]/enrich`).
+1. Create an API key at [PropertyData](https://propertydata.co.uk/).
+2. Set `PROPERTYDATA_API_KEY` in Vercel (optional `PROPERTYDATA_LISTS`, `DATA_SOURCE=propertydata`).
+3. `PropertyDataDataSource.searchListings` already calls `GET https://api.propertydata.co.uk/sourced-properties` and maps into `Listing`.
+4. `GET /api/listings/search?city=liverpool&minPrice=70000&maxPrice=200000&postcode=L4` uses that source when keyed, otherwise mock.
+5. Next step: listing → `Deal` assembler, then `enrichDeal()` for live GDV. Explore still reads the mock catalogue until that assembler exists.
 
 See **ARCHITECTURE.md** for the swap path.
 

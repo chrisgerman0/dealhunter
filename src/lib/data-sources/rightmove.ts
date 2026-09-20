@@ -22,8 +22,9 @@ export class RightmoveDataSource implements PropertyDataSource {
     throw new Error("RightmoveDataSource not implemented");
   }
   async getSoldComps(postcode: string, beds: number): Promise<Comp[]> {
-    void postcode; void beds;
-    throw new Error("RightmoveDataSource not implemented");
+    void postcode;
+    void beds;
+    throw new Error("RightmoveDataSource not implemented — use live Land Registry comps");
   }
   async getAirbnbComps(coords: Coords, beds: number): Promise<AirbnbComp[]> {
     void coords; void beds;

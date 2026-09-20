@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Deal Hunter separates **UI state**, **domain models**, and **property data sources** so the polished MVP can run on mock listings today while **crime, flood and sold-comps layers hit live free UK APIs**.
+Deal Hunter separates **UI state**, **domain models**, and **property data sources** so the polished MVP can run on mock listings today while **sold comps / GDV hit live Land Registry Price Paid**. Flood is a light extra. Crime is not used.
 
 ## High-level layout
 
@@ -13,7 +13,7 @@ src/
   data/mock-properties.ts # 46 fully-vetted mock deals (8 layers each)
   lib/
     data-sources/         # PropertyDataSource interface + Mock / stubs / factory
-    enrich/               # Live UK clients (crime, flood, comps) + deal merge
+    enrich/               # Live UK clients (comps, flood) + deal merge
     format.ts             # GBP, quality, capital tags
   store/useDealStore.ts   # Zustand + persist
   types/deal.ts           # Shared domain types
@@ -30,7 +30,7 @@ Every deal carries eight typed vetting layers:
 5. **Financial** — Bridge BRRR (70% LTV, 1%/mo, 9mo) and Cash+refi; best/base/worst; quality from capital stuck
 6. **Income** — Airbnb 75th, council lease % LHA, hybrid
 7. **Regulatory** — Article 4, selective licensing, additional HMO, conservation, flood zone (live EA zones)
-8. **Risk / motivation** — DOM, reductions, auction keywords, crime (live police.uk), Ofsted, transport, green space, deal score
+8. **Risk / motivation** — DOM, reductions, auction keywords, Ofsted, transport, green space, deal score
 
 Quality bands (capital stuck, base Bridge scenario):
 
@@ -61,12 +61,12 @@ interface PropertyDataSource {
 
 | Class | Status |
 |-------|--------|
-| `MockPropertyDataSource` | Listings from mock catalogue. `getCrimeData` / `getFloodData` / `getSoldComps` call live clients and fall back to mock on failure. |
-| `RightmoveDataSource` | Stub — throws until wired. Do not scrape. |
-| `ZooplaDataSource` | Stub — throws until wired. Do not scrape. |
-| `PropertyDataListingsSource` | Stub for a keyed listings API. |
+| `MockPropertyDataSource` | Listings from mock catalogue. `getSoldComps` / `getFloodData` call live clients and fall back to mock on failure. |
+| `RightmoveDataSource` | Stub — throws. Do not scrape. |
+| `ZooplaDataSource` | Stub — throws. Do not scrape. |
+| `PropertyDataDataSource` | Maps PropertyData `/sourced-properties` → `Listing` when `PROPERTYDATA_API_KEY` is set. |
 | `AirDNADataSource` | Stub for STR comps |
-| `createPropertyDataSource()` | Factory — listings hard-wired to Mock via `propertyDataSource` export |
+| `createPropertyDataSource()` | `propertydata` if keyed and `DATA_SOURCE` says so; Explore UI still uses mock deals until a listing→Deal assembler exists. |
 
 UI Explore / shortlist still read enriched `Deal` objects from `src/data/mock-properties.ts`. Deal detail calls `GET /api/deals/[id]/enrich` on load and overlays live layers.
 
@@ -76,12 +76,11 @@ Shared clients live in `src/lib/enrich/` and are used by both the Route Handlers
 
 | Client | Upstream | Cache | Timeout |
 |--------|----------|-------|---------|
-| `crime.ts` | `https://data.police.uk/api/crimes-street/all-crime` | 12h in-memory | ~8s |
+| `comps.ts` (primary) | Land Registry SPARQL `VALUES` nearby postcodes + PPD REST street/postcode | 24h | ~8s |
 | `flood.ts` | EA OGC Features Flood Map for Planning (ArcGIS FeatureServer fallback) | 24h | ~8s |
-| `comps.ts` | Land Registry SPARQL `VALUES` nearby postcodes + PPD REST street/postcode | 24h | ~8s |
 | `postcodes.ts` | postcodes.io lookup / reverse / nearby / bulk | 24h | ~8s |
 
-`merge.ts` (`enrichDeal`) fans the three live calls out with `Promise.allSettled`. Each layer independently:
+`merge.ts` (`enrichDeal`) fans **comps + flood** with `Promise.allSettled`. Each layer independently:
 
 - **success** → write into the deal + `enrichment.*.status = "live"` + timestamp
 - **failure** → keep the mock layer + `status = "mock-fallback"`
@@ -92,23 +91,23 @@ Price Paid Data does **not** include bedrooms or floor area. Comps are recent ne
 
 ### Route Handlers
 
-- `GET /api/enrich/crime?lat=&lng=`
-- `GET /api/enrich/flood?lat=&lng=`
 - `GET /api/enrich/comps?postcode=&beds=` (optional `lat`/`lng` for better nearby matching)
-- `GET /api/deals/[id]/enrich` — always returns Deal JSON (404 if unknown id)
+- `GET /api/enrich/flood?lat=&lng=`
+- `GET /api/deals/[id]/enrich` — always returns Deal JSON (404 if unknown id); comps + flood only
+- `GET /api/listings/search` — mock catalogue, or PropertyData `/sourced-properties` when keyed
 
 ### Rate-limit notes
 
-- **police.uk** — public, no key; identify the app with User-Agent; data is monthly so 12h cache is enough.
 - **Land Registry SPARQL / LDA** — shared public SPARQL; prefer exact postcode `VALUES` queries (fast) over `STRSTARTS` (often times out). Cache 24h.
 - **EA OGC / ArcGIS** — open data; tiny bbox / point intersect; cache 24h.
 - **postcodes.io** — free, fair use; cache lookups.
+- **PropertyData** — paid key, credit-based; only call from `/api/listings/search` when keyed.
 
 Keep batch jobs off these endpoints; deal-detail traffic is the intended use.
 
 ## Swap path for remaining integrations
 
-1. **Listings** — Implement `searchListings` / `getListingDetail` against PropertyData (or another licensed feed). Map remote fields → `Listing` / `ListingDetail`. Do not scrape Rightmove/Zoopla.
+1. **Listings** — `PropertyDataDataSource.searchListings` is ready. Set `PROPERTYDATA_API_KEY` and call `/api/listings/search`. Then assemble listing → `Deal` and point Explore at it. Do not scrape Rightmove/Zoopla.
 2. **Comps** — Already live via Land Registry. Optional: join EPC (free key) later for bedrooms / sqft.
 3. **Airbnb** — AirDNA / PriceLabs / internal scrape in `getAirbnbComps` (and optionally `AirDNADataSource`).
 4. **LHA** — VOA LHA tables by BRMA from postcode → `getLHARate`.

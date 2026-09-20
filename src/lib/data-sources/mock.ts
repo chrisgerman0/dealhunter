@@ -1,5 +1,4 @@
 import { getAllDeals, getDealById } from "@/data/mock-properties";
-import { getLiveCrimeData } from "@/lib/enrich/crime";
 import { getLiveFloodData } from "@/lib/enrich/flood";
 import { getLiveSoldComps } from "@/lib/enrich/comps";
 import type {
@@ -118,17 +117,13 @@ export class MockPropertyDataSource implements PropertyDataSource {
   }
 
   async getCrimeData(coords: Coords): Promise<CrimeData> {
-    try {
-      return await getLiveCrimeData(coords);
-    } catch {
-      return {
-        score: 5,
-        burglaryPer1000: 12.4,
-        asbPer1000: 28.1,
-        summary:
-          "Average crime for the wider postcode sector; live police.uk data was unavailable so this is a modelled fallback.",
-      };
-    }
+    void coords;
+    return {
+      score: 5,
+      burglaryPer1000: 12.4,
+      asbPer1000: 28.1,
+      summary: "Crime scoring is not used for buying decisions in this build.",
+    };
   }
 
   async getPlanningData(coords: Coords): Promise<PlanningFlags> {

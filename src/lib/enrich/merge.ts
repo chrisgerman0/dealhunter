@@ -1,5 +1,4 @@
 import type { Deal, EnrichmentStatus, LayerEnrichmentMeta } from "@/types/deal";
-import { getLiveCrimeData } from "./crime";
 import { getLiveFloodData } from "./flood";
 import { getLiveSoldComps } from "./comps";
 
@@ -28,8 +27,7 @@ function floodFlags(existing: string[], zone: 1 | 2 | 3, risk: "low" | "medium" 
 }
 
 export async function enrichDeal(deal: Deal): Promise<Deal> {
-  const [crimeR, floodR, compsR] = await Promise.allSettled([
-    getLiveCrimeData(deal.coords),
+  const [floodR, compsR] = await Promise.allSettled([
     getLiveFloodData(deal.coords),
     getLiveSoldComps({
       postcode: deal.postcode,
@@ -49,30 +47,11 @@ export async function enrichDeal(deal: Deal): Promise<Deal> {
       soldComps: { ...deal.layers.soldComps, comps: [...deal.layers.soldComps.comps] },
     },
     enrichment: {
-      crime: meta("mock-fallback"),
+      crime: meta("mock-fallback", { note: "Crime enrichment is not used." }),
       flood: meta("mock-fallback"),
       comps: meta("mock-fallback"),
     },
   };
-
-  if (crimeR.status === "fulfilled") {
-    const crime = crimeR.value;
-    next.layers.risk.crimeScore = crime.score;
-    next.layers.risk.crimeSummary = crime.summary;
-    next.layers.risk.burglaryPer1000 = crime.burglaryPer1000;
-    next.layers.risk.asbPer1000 = crime.asbPer1000;
-    if (!next.layers.risk.reasoning.includes("police.uk")) {
-      next.layers.risk.reasoning = `${crime.summary} ${next.layers.risk.reasoning}`;
-    }
-    next.enrichment!.crime = meta("live", {
-      source: "police.uk street-level crime",
-      note: crime.month ? `Month ${crime.month}` : undefined,
-    });
-  } else {
-    next.enrichment!.crime = meta("mock-fallback", {
-      note: crimeR.reason instanceof Error ? crimeR.reason.message : "Crime source unavailable",
-    });
-  }
 
   if (floodR.status === "fulfilled") {
     const flood = floodR.value;

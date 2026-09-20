@@ -27,7 +27,7 @@ export function VettingLayers({ deal }: { deal: Deal }) {
   const { layers } = deal;
 
   return (
-    <Accordion multiple defaultValue={["financial", "conversion"]} className="rounded-xl border px-3">
+    <Accordion multiple defaultValue={["comps", "financial"]} className="rounded-xl border px-3">
       <AccordionItem value="physical">
         <AccordionTrigger>
           <span className="flex items-center gap-2">
@@ -91,12 +91,14 @@ export function VettingLayers({ deal }: { deal: Deal }) {
           </span>
         </AccordionTrigger>
         <AccordionContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Nearby HM Land Registry sold prices. Realistic GDV is the median; stretch is the 75th percentile; conservative is the 25th.
+          </p>
           <dl className="grid gap-2 sm:grid-cols-2 text-sm">
-            <Row label="Median" value={formatGBP(layers.soldComps.median)} />
+            <Row label="Median (realistic GDV)" value={formatGBP(layers.soldComps.median)} />
             <Row label="Sample size" value={String(layers.soldComps.sampleSize)} />
-            <Row label="GDV realistic" value={formatGBP(layers.soldComps.gdvRealistic)} />
-            <Row label="GDV stretch" value={formatGBP(layers.soldComps.gdvStretch)} />
-            <Row label="GDV conservative" value={formatGBP(layers.soldComps.gdvConservative)} />
+            <Row label="GDV stretch (75th)" value={formatGBP(layers.soldComps.gdvStretch)} />
+            <Row label="GDV conservative (25th)" value={formatGBP(layers.soldComps.gdvConservative)} />
           </dl>
           {layers.soldComps.thinSample && (
             <p className="text-sm text-amber-800">
@@ -220,7 +222,6 @@ export function VettingLayers({ deal }: { deal: Deal }) {
             <AlertTriangle className="size-4 text-emerald-600" />
             8. Risk & motivation
             <Badge variant="secondary">{layers.risk.dealQualityScore}/10</Badge>
-            <LiveBadge meta={deal.enrichment?.crime} />
           </span>
         </AccordionTrigger>
         <AccordionContent className="space-y-3">
@@ -228,13 +229,6 @@ export function VettingLayers({ deal }: { deal: Deal }) {
             <Row label="Days on market" value={String(layers.risk.daysOnMarket)} />
             <Row label="Price reductions" value={String(layers.risk.priceReductions)} />
             <Row label="Auction" value={yn(layers.risk.auction)} />
-            <Row label="Crime score" value={`${layers.risk.crimeScore}/10`} />
-            {layers.risk.burglaryPer1000 != null && (
-              <Row label="Burglary / 1,000" value={String(layers.risk.burglaryPer1000)} />
-            )}
-            {layers.risk.asbPer1000 != null && (
-              <Row label="ASB / 1,000" value={String(layers.risk.asbPer1000)} />
-            )}
             <Row label="Ofsted" value={layers.risk.ofstedRating} />
             <Row label="Transport" value={`${layers.risk.transportScore}/10`} />
             <Row label="Green space" value={`${layers.risk.greenSpaceScore}/10`} />
