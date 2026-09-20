@@ -1,4 +1,6 @@
 import { getAllDeals, getDealById } from "@/data/mock-properties";
+import { getLiveFloodData } from "@/lib/enrich/flood";
+import { getLiveSoldComps } from "@/lib/enrich/comps";
 import type {
   AirbnbComp,
   Comp,
@@ -24,6 +26,8 @@ function toListing(d: ReturnType<typeof getAllDeals>[number]): Listing {
     coords: d.coords,
     city: d.city,
     tenure: d.tenure,
+    propertyType: d.propertyType,
+    listingUrl: d.listingUrl,
   };
 }
 
@@ -81,6 +85,12 @@ export class MockPropertyDataSource implements PropertyDataSource {
   }
 
   async getSoldComps(postcode: string, beds: number): Promise<Comp[]> {
+    try {
+      const live = await getLiveSoldComps({ postcode, beds });
+      if (live.comps.length > 0) return live.comps;
+    } catch {
+      // fall through to mock catalogue
+    }
     const area = postcode.split(" ")[0];
     const deal = getAllDeals().find((d) => d.area === area && d.targetBeds === beds)
       ?? getAllDeals().find((d) => d.area === area)
@@ -114,7 +124,7 @@ export class MockPropertyDataSource implements PropertyDataSource {
       score: 5,
       burglaryPer1000: 12.4,
       asbPer1000: 28.1,
-      summary: "Average crime for the wider postcode sector; check street-level Police.uk data before offer.",
+      summary: "Crime scoring is not used for buying decisions in this build.",
     };
   }
 
@@ -129,7 +139,10 @@ export class MockPropertyDataSource implements PropertyDataSource {
   }
 
   async getFloodData(coords: Coords): Promise<FloodData> {
-    void coords;
-    return { zone: 1, risk: "low" };
+    try {
+      return await getLiveFloodData(coords);
+    } catch {
+      return { zone: 1, risk: "low", sourceNote: "Mock fallback — Environment Agency lookup unavailable." };
+    }
   }
 }

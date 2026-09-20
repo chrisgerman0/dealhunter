@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import type { Deal } from "@/types/deal";
 import { formatGBP, capitalTagFromCashIn } from "@/lib/format";
 import { PhotoGallery } from "./photo-gallery";
 import { FloorplanPlaceholder } from "./floorplan-placeholder";
 import { VettingLayers } from "./vetting-layers";
+import { GdvCallout } from "./gdv-callout";
 import { MiniMap } from "@/components/map/mini-map";
 import { QualityBadge } from "@/components/deals/quality-badge";
 import { CapitalTagBadge } from "@/components/deals/capital-tag";
@@ -17,11 +19,43 @@ import { cn } from "@/lib/utils";
 
 export function DealDetailClient({ deal: raw }: { deal: Deal }) {
   const capital = useDealStore((s) => s.settings.capital);
-  const deal = { ...raw, capitalTag: capitalTagFromCashIn(raw.cashInBase, capital) };
+  const [dealData, setDealData] = useState<Deal>(raw);
+  const [enrichState, setEnrichState] = useState<"loading" | "ready" | "error">("loading");
+  const deal = { ...dealData, capitalTag: capitalTagFromCashIn(dealData.cashInBase, capital) };
   const toggleShortlist = useDealStore((s) => s.toggleShortlist);
   const dismiss = useDealStore((s) => s.dismiss);
   const snooze = useDealStore((s) => s.snooze);
   const isShortlisted = useDealStore((s) => s.isShortlisted(deal.id));
+  const liveComps = deal.enrichment?.comps.status === "live";
+  const thin = Boolean(deal.layers.soldComps.thinSample);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    setDealData(raw);
+    setEnrichState("loading");
+    fetch(`/api/deals/${raw.id}/enrich`, { signal: ac.signal, cache: "no-store" })
+      .then((res) => {
+        if (!res.ok) throw new Error(`Enrich failed (${res.status})`);
+        return res.json() as Promise<Deal>;
+      })
+      .then((enriched) => {
+        setDealData(enriched);
+        setEnrichState("ready");
+      })
+      .catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setEnrichState("error");
+        setDealData((current) => ({
+          ...current,
+          enrichment: {
+            crime: { status: "mock-fallback", updatedAt: null, note: "Crime enrichment is not used." },
+            flood: { status: "mock-fallback", updatedAt: null, note: "Live flood lookup failed" },
+            comps: { status: "mock-fallback", updatedAt: null, note: "Live comps lookup failed" },
+          },
+        }));
+      });
+    return () => ac.abort();
+  }, [raw]);
 
   return (
     <div className="px-4 py-6">
@@ -34,6 +68,17 @@ export function DealDetailClient({ deal: raw }: { deal: Deal }) {
           Back to Explore
         </Link>
       </div>
+
+      {enrichState === "loading" && (
+        <p className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+          Refreshing Land Registry sold comps and flood zone…
+        </p>
+      )}
+      {enrichState === "error" && (
+        <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Could not refresh live sold comps — showing modelled figures.
+        </p>
+      )}
 
       <div className="grid gap-8 lg:grid-cols-[1.4fr_1fr]">
         <div className="space-y-6">
@@ -59,10 +104,23 @@ export function DealDetailClient({ deal: raw }: { deal: Deal }) {
             <p className="text-3xl font-bold text-emerald-700">{formatGBP(deal.price)}</p>
           </div>
 
+          <GdvCallout
+            asking={deal.price}
+            gdv={deal.gdv}
+            live={liveComps}
+            thin={thin}
+            sampleSize={deal.layers.soldComps.sampleSize}
+          />
+
           <div className="grid grid-cols-2 gap-2">
             <Stat label="Beds" value={`${deal.beds} → ${deal.targetBeds}`} />
             <Stat label="Sqft" value={deal.sqft.toLocaleString("en-GB")} />
-            <Stat label="GDV" value={formatGBP(deal.gdv)} />
+            <Stat
+              label={liveComps && !thin ? "Live GDV (median)" : "GDV"}
+              value={formatGBP(deal.gdv)}
+            />
+            <Stat label="GDV stretch" value={formatGBP(deal.layers.soldComps.gdvStretch)} />
+            <Stat label="GDV conservative" value={formatGBP(deal.layers.soldComps.gdvConservative)} />
             <Stat label="Capital stuck" value={formatGBP(deal.capitalStuck)} />
             <Stat label="Cash-in (base)" value={formatGBP(deal.cashInBase)} />
             <Stat label="Income / mo" value={formatGBP(deal.monthlyIncome)} />
@@ -102,7 +160,15 @@ export function DealDetailClient({ deal: raw }: { deal: Deal }) {
               <Clock className="size-4" />
               Snooze
             </Button>
-            <a href={deal.listingUrl} target="_blank" rel="noreferrer" className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-secondary px-3 text-sm font-medium text-secondary-foreground hover:bg-secondary/80"><ExternalLink className="size-4" />View listing</a>
+            <a
+              href={deal.listingUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-secondary px-3 text-sm font-medium text-secondary-foreground hover:bg-secondary/80"
+            >
+              <ExternalLink className="size-4" />
+              View listing
+            </a>
           </div>
 
           <MiniMap coords={deal.coords} label={deal.address} />

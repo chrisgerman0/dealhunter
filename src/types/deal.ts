@@ -19,6 +19,8 @@ export interface Comp {
   sqft: number;
   soldDate: string;
   distanceMiles: number;
+  /** Price Paid Data property type when known (terraced, semi-detached, …). */
+  propertyType?: string;
 }
 
 export interface AirbnbComp {
@@ -35,6 +37,8 @@ export interface CrimeData {
   burglaryPer1000: number;
   asbPer1000: number;
   summary: string;
+  month?: string;
+  totalIncidents?: number;
 }
 
 export interface PlanningFlags {
@@ -47,6 +51,7 @@ export interface PlanningFlags {
 export interface FloodData {
   zone: 1 | 2 | 3;
   risk: "low" | "medium" | "high";
+  sourceNote?: string;
 }
 
 export interface PhysicalLayer {
@@ -73,6 +78,8 @@ export interface SoldCompsLayer {
   gdvStretch: number;
   gdvConservative: number;
   comps: Comp[];
+  thinSample?: boolean;
+  sourceNote?: string;
 }
 
 export interface RefurbBreakdown {
@@ -129,6 +136,7 @@ export interface RegulatoryLayer {
   additionalHmo: boolean;
   conservation: boolean;
   floodZone: 1 | 2 | 3;
+  floodRisk?: "low" | "medium" | "high";
   flags: string[];
 }
 
@@ -138,11 +146,30 @@ export interface RiskMotivationLayer {
   auction: boolean;
   distressedKeywords: string[];
   crimeScore: number;
+  crimeSummary?: string;
+  burglaryPer1000?: number;
+  asbPer1000?: number;
   ofstedRating: "Outstanding" | "Good" | "Requires Improvement" | "Inadequate" | "N/A";
   transportScore: number; // 1-10
   greenSpaceScore: number; // 1-10
   dealQualityScore: number; // 1-10
   reasoning: string;
+}
+
+export type EnrichmentStatus = "live" | "mock-fallback" | "pending";
+
+export interface LayerEnrichmentMeta {
+  status: EnrichmentStatus;
+  updatedAt: string | null;
+  source?: string;
+  note?: string;
+  thinSample?: boolean;
+}
+
+export interface DealEnrichment {
+  crime: LayerEnrichmentMeta;
+  flood: LayerEnrichmentMeta;
+  comps: LayerEnrichmentMeta;
 }
 
 export interface VettingLayers {
@@ -181,6 +208,7 @@ export interface Deal {
   cashInBase: number;
   layers: VettingLayers;
   createdAt: string;
+  enrichment?: DealEnrichment;
 }
 
 export interface Listing {
@@ -194,6 +222,14 @@ export interface Listing {
   coords: Coords;
   city: City;
   tenure: Tenure;
+  /** Portal type (PropertyData `type_standardised`, else `type`). */
+  propertyType?: string;
+  /** Licensed provider listing URL — never scraped. */
+  listingUrl?: string;
+  /** PropertyData sourcing lists this row appears on. */
+  sourceLists?: string[];
+  reducedBy?: number;
+  monthsOnMarket?: number;
 }
 
 export interface ListingDetail extends Listing {
