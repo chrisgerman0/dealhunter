@@ -26,6 +26,8 @@ function toListing(d: ReturnType<typeof getAllDeals>[number]): Listing {
     coords: d.coords,
     city: d.city,
     tenure: d.tenure,
+    propertyType: d.propertyType,
+    listingUrl: d.listingUrl,
   };
 }
 

@@ -10,6 +10,8 @@ import type {
   SearchParams,
 } from "@/types/deal";
 
+export type DataSourceKind = "mock" | "rightmove" | "zoopla" | "propertydata";
+
 export interface PropertyDataSource {
   searchListings(params: SearchParams): Promise<Listing[]>;
   getListingDetail(id: string): Promise<ListingDetail>;

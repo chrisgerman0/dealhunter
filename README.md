@@ -2,7 +2,7 @@
 
 Personal-use UK BMV (below market value) deal hunter focused on **Liverpool** and **Manchester**. Find terraces that can add a bedroom via internal reconfiguration, then model a **BRRR** refinance (Bridge vs Cash+refi).
 
-This repository is a polished **Next.js 14 frontend MVP**. Listings are still mock (Rightmove/Zoopla have no personal API — do not scrape). **Sold comps / GDV come from live Land Registry Price Paid.** Flood zone is a light extra. Crime is not used for buying decisions.
+This repository is a polished **Next.js 14 frontend MVP**. Listings are still mock (Rightmove/Zoopla have no personal API — **do not scrape**). When `PROPERTYDATA_API_KEY` is set, `GET /api/listings/search` switches to licensed PropertyData `/sourced-properties`. **Sold comps / GDV come from live Land Registry Price Paid**, not from listings. Flood zone is a light extra. Crime is not used for buying decisions.
 
 ## Stack
 
@@ -34,8 +34,8 @@ npm start
 | Variable | Required | Description |
 |----------|----------|-------------|
 | *(none for maps)* | — | Maps use MapLibre + free Esri street tiles — no token required. |
-| `DATA_SOURCE` | No | `mock` (default) or `propertydata` when keyed. `rightmove` / `zoopla` stubs throw — do not scrape. |
-| `PROPERTYDATA_API_KEY` | No | Enables `GET /api/listings/search` against PropertyData `/sourced-properties`. |
+| `DATA_SOURCE` | No | `mock` (default) or `propertydata`. Unset + a key auto-selects `propertydata`. `rightmove` / `zoopla` stubs throw — do not scrape. |
+| `PROPERTYDATA_API_KEY` | No | Factory switch for `GET /api/listings/search` against PropertyData `/sourced-properties`. |
 | `PROPERTYDATA_LISTS` | No | Comma-separated sourcing lists (default `unmodernised-properties,reduced-properties`). |
 
 No paid keys are required for live enrichment.
@@ -51,7 +51,7 @@ No paid keys are required for live enrichment.
 | `GET /api/enrich/comps?postcode=&beds=` | Land Registry Price Paid sold comps + GDV bands (median / p75 / p25) |
 | `GET /api/enrich/flood?lat=&lng=` | Environment Agency flood zones (optional) |
 | `GET /api/deals/[id]/enrich` | Merges live comps (and flood) into the deal JSON |
-| `GET /api/listings/search` | Mock listings until `PROPERTYDATA_API_KEY` is set; then PropertyData sourced-properties |
+| `GET /api/listings/search` | Factory: mock catalogue, or PropertyData `/sourced-properties` when keyed (`source`, `keyed`, `listings`, `note`) |
 
 ## Live enrichment (free official APIs)
 
@@ -66,15 +66,16 @@ Deal detail shows asking vs live GDV in plain English so a first-time buyer can 
 
 ## Where to plug real listing APIs
 
-Listings stay mock until a keyed provider is added. **Do not scrape Rightmove or Zoopla.**
+**Do not scrape Rightmove or Zoopla.** Inventory is licensed PropertyData (a feed of those portals). Sold comps stay on free Land Registry regardless of the listings switch.
 
 ### Adding PropertyData
 
 1. Create an API key at [PropertyData](https://propertydata.co.uk/).
 2. Set `PROPERTYDATA_API_KEY` in Vercel (optional `PROPERTYDATA_LISTS`, `DATA_SOURCE=propertydata`).
-3. `PropertyDataDataSource.searchListings` already calls `GET https://api.propertydata.co.uk/sourced-properties` and maps into `Listing`.
-4. `GET /api/listings/search?city=liverpool&minPrice=70000&maxPrice=200000&postcode=L4` uses that source when keyed, otherwise mock.
-5. Next step: listing → `Deal` assembler, then `enrichDeal()` for live GDV. Explore still reads the mock catalogue until that assembler exists.
+3. `createPropertyDataSource()` is the single switch: key (or `DATA_SOURCE=propertydata`) → `PropertyDataDataSource`; otherwise mock. `DATA_SOURCE=mock` stays mock even if a key is present.
+4. `PropertyDataDataSource.searchListings` calls `GET https://api.propertydata.co.uk/sourced-properties` and maps `id`, `address`, `postcode`, `price`, `bedrooms`, `lat`/`lng`, `type` / `type_standardised`, `url`, `image_url`, `lists`, `reduced_by`.
+5. `GET /api/listings/search?city=liverpool&minPrice=70000&maxPrice=200000&postcode=L4` uses that factory. Response: `{ source, keyed, listings, note }`.
+6. Next: listing → `Deal` assembler, then `enrichDeal()` for live GDV. Explore still reads the mock catalogue until that assembler exists. `getListingDetail` is already shaped for `/sourced-property?property_id=`.
 
 See **ARCHITECTURE.md** for the swap path.
 

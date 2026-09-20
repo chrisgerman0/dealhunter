@@ -1,6 +1,11 @@
 const DEFAULT_TIMEOUT_MS = 8_000;
 const DEFAULT_UA = "DealHunter/0.1 (+https://dealhunter.vercel.app)";
 
+/** Strip API keys from URLs before they appear in errors or logs. */
+export function redactUrl(url: string): string {
+  return url.replace(/([?&](?:key|api_key|apikey)=)[^&]*/gi, "$1REDACTED");
+}
+
 export class UpstreamError extends Error {
   constructor(
     message: string,
@@ -45,7 +50,7 @@ export async function fetchUpstream(url: string, init: FetchInit = {}): Promise<
   } catch (err) {
     const name = err instanceof Error ? err.name : "Error";
     if (name === "AbortError" || name === "TimeoutError") {
-      throw new UpstreamError(`Upstream timed out: ${url}`, undefined, name);
+      throw new UpstreamError(`Upstream timed out: ${redactUrl(url)}`, undefined, name);
     }
     throw new UpstreamError(
       `Upstream request failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -58,12 +63,12 @@ export async function fetchUpstream(url: string, init: FetchInit = {}): Promise<
 export async function fetchJson<T>(url: string, init: FetchInit = {}): Promise<T> {
   const res = await fetchUpstream(url, init);
   if (!res.ok) {
-    throw new UpstreamError(`Upstream HTTP ${res.status} for ${url}`, res.status);
+    throw new UpstreamError(`Upstream HTTP ${res.status} for ${redactUrl(url)}`, res.status);
   }
   try {
     return (await res.json()) as T;
   } catch {
-    throw new UpstreamError(`Upstream returned non-JSON for ${url}`, res.status);
+    throw new UpstreamError(`Upstream returned non-JSON for ${redactUrl(url)}`, res.status);
   }
 }
 
@@ -74,11 +79,11 @@ export async function fetchJsonAllowEmpty<T>(
   const res = await fetchUpstream(url, init);
   if (res.status === 404) return null;
   if (!res.ok) {
-    throw new UpstreamError(`Upstream HTTP ${res.status} for ${url}`, res.status);
+    throw new UpstreamError(`Upstream HTTP ${res.status} for ${redactUrl(url)}`, res.status);
   }
   try {
     return (await res.json()) as T;
   } catch {
-    throw new UpstreamError(`Upstream returned non-JSON for ${url}`, res.status);
+    throw new UpstreamError(`Upstream returned non-JSON for ${redactUrl(url)}`, res.status);
   }
 }

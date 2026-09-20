@@ -62,11 +62,11 @@ interface PropertyDataSource {
 | Class | Status |
 |-------|--------|
 | `MockPropertyDataSource` | Listings from mock catalogue. `getSoldComps` / `getFloodData` call live clients and fall back to mock on failure. |
-| `RightmoveDataSource` | Stub — throws. Do not scrape. |
-| `ZooplaDataSource` | Stub — throws. Do not scrape. |
-| `PropertyDataDataSource` | Maps PropertyData `/sourced-properties` → `Listing` when `PROPERTYDATA_API_KEY` is set. |
+| `RightmoveDataSource` | Stub — throws `DataSourceNotAvailableError`. Do not scrape. |
+| `ZooplaDataSource` | Stub — throws `DataSourceNotAvailableError`. Do not scrape. |
+| `PropertyDataDataSource` | Maps PropertyData `/sourced-properties` → `Listing` (and `/sourced-property` → `ListingDetail`) when `PROPERTYDATA_API_KEY` is set. Comps still Land Registry. |
 | `AirDNADataSource` | Stub for STR comps |
-| `createPropertyDataSource()` | `propertydata` if keyed and `DATA_SOURCE` says so; Explore UI still uses mock deals until a listing→Deal assembler exists. |
+| `createPropertyDataSource()` | Single listings switch used by `GET /api/listings/search`. Auto `propertydata` if keyed; honour `DATA_SOURCE`. Explore UI still uses mock deals until a listing→Deal assembler exists. |
 
 UI Explore / shortlist still read enriched `Deal` objects from `src/data/mock-properties.ts`. Deal detail calls `GET /api/deals/[id]/enrich` on load and overlays live layers.
 
@@ -94,7 +94,7 @@ Price Paid Data does **not** include bedrooms or floor area. Comps are recent ne
 - `GET /api/enrich/comps?postcode=&beds=` (optional `lat`/`lng` for better nearby matching)
 - `GET /api/enrich/flood?lat=&lng=`
 - `GET /api/deals/[id]/enrich` — always returns Deal JSON (404 if unknown id); comps + flood only
-- `GET /api/listings/search` — mock catalogue, or PropertyData `/sourced-properties` when keyed
+- `GET /api/listings/search` — `createPropertyDataSource()`; body `{ source, keyed, listings, note }`. Never scrapes Rightmove/Zoopla.
 
 ### Rate-limit notes
 
@@ -107,13 +107,13 @@ Keep batch jobs off these endpoints; deal-detail traffic is the intended use.
 
 ## Swap path for remaining integrations
 
-1. **Listings** — `PropertyDataDataSource.searchListings` is ready. Set `PROPERTYDATA_API_KEY` and call `/api/listings/search`. Then assemble listing → `Deal` and point Explore at it. Do not scrape Rightmove/Zoopla.
+1. **Listings** — Factory + `PropertyDataDataSource` are ready. Set `PROPERTYDATA_API_KEY` and call `/api/listings/search`. Then assemble listing → `Deal` and point Explore at it. Do not scrape Rightmove/Zoopla.
 2. **Comps** — Already live via Land Registry. Optional: join EPC (free key) later for bedrooms / sqft.
-3. **Airbnb** — AirDNA / PriceLabs / internal scrape in `getAirbnbComps` (and optionally `AirDNADataSource`).
+3. **Airbnb** — AirDNA / PriceLabs in `getAirbnbComps` (and optionally `AirDNADataSource`). Do not scrape portals.
 4. **LHA** — VOA LHA tables by BRMA from postcode → `getLHARate`.
 5. **Planning / licensing** — planning.data.gov.uk `entity.json` (Article 4, conservation) → `getPlanningData`.
 6. **Deal assembly** — listing detail + `enrichDeal()` + shared financial model (extract `buildScenario` from the mock generator into `lib/finance.ts`).
-7. Flip `DATA_SOURCE` / factory to the live listings class. Keep Mock for demos and tests.
+7. Keep Mock for demos and tests (`DATA_SOURCE=mock`).
 
 Suggested next extraction: move `buildScenario` from the mock generator into `src/lib/finance.ts` so live and mock paths share one calculator. Settings (bridge months, rate, LTV, contingency) should feed that calculator once live.
 

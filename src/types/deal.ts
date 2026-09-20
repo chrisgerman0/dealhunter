@@ -222,6 +222,14 @@ export interface Listing {
   coords: Coords;
   city: City;
   tenure: Tenure;
+  /** Portal type (PropertyData `type_standardised`, else `type`). */
+  propertyType?: string;
+  /** Licensed provider listing URL — never scraped. */
+  listingUrl?: string;
+  /** PropertyData sourcing lists this row appears on. */
+  sourceLists?: string[];
+  reducedBy?: number;
+  monthsOnMarket?: number;
 }
 
 export interface ListingDetail extends Listing {
