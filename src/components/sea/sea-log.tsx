@@ -168,7 +168,7 @@ export function BookingsPanel({
   }
 
   return (
-    <section className="flex h-auto min-h-0 flex-col overflow-hidden rounded-3xl border border-stone-200 bg-white shadow-[0_18px_40px_-28px_rgba(28,25,23,0.45)] lg:h-full">
+    <section className="rounded-3xl border border-stone-200 bg-white shadow-[0_18px_40px_-28px_rgba(28,25,23,0.45)]">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-100 px-4 py-3">
         <h2 className="text-sm font-medium uppercase tracking-[0.16em] text-stone-500">Flights and stays</h2>
         <div className="flex rounded-full bg-stone-100 p-1">
@@ -188,7 +188,7 @@ export function BookingsPanel({
           ))}
         </div>
       </div>
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3 [scrollbar-color:#d6d3d1_transparent] [scrollbar-width:thin]">
+      <div className="space-y-3 px-4 py-3">
         <div className="flex gap-2">
           <label className="min-w-0 flex-1">
             <span className={labelClass}>Booking link</span>
@@ -308,7 +308,7 @@ export function SpendPanel({
   }
 
   return (
-    <section className="flex h-auto min-h-0 flex-col overflow-hidden rounded-3xl border border-stone-200 bg-white shadow-[0_18px_40px_-28px_rgba(28,25,23,0.45)] lg:h-full">
+    <section className="rounded-3xl border border-stone-200 bg-white shadow-[0_18px_40px_-28px_rgba(28,25,23,0.45)]">
       <div className="flex items-end justify-between gap-3 border-b border-stone-100 px-4 py-3">
         <div>
           <h2 className="text-sm font-medium uppercase tracking-[0.16em] text-stone-500">Trip spend</h2>
@@ -331,7 +331,7 @@ export function SpendPanel({
           </select>
         </label>
       </div>
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3 [scrollbar-color:#d6d3d1_transparent] [scrollbar-width:thin]">
+      <div className="space-y-3 px-4 py-3">
         <div className="grid grid-cols-2 gap-2">
           <Field label="Day" value={date} onChange={setDate} type="date" />
           <label>

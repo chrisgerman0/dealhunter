@@ -30,6 +30,16 @@ export interface Milestone {
 
 export const PHASES: TripPhase[] = [
   {
+    id: "manchester",
+    city: "Manchester",
+    chip: "Manchester",
+    country: "United Kingdom",
+    dateLabel: "15 January 2027",
+    start: "2027-01-15",
+    end: "2027-01-15",
+    note: "First leg is Manchester to Dubai on 15 January 2027.",
+  },
+  {
     id: "dubai",
     city: "Dubai",
     chip: "Dubai stopover",
@@ -194,13 +204,16 @@ export const TRIP_SPAN_DAYS = daysBetween(TRIP_START, TRIP_END) + 1;
 
 export const COUNTRY_COUNT = new Set(PHASES.map((phase) => phase.country)).size;
 
-/** On a shared handover day, the phase that starts that day is the active one. */
+/**
+ * On a handover day, the phase that starts that day is the active one.
+ * Manchester and Dubai both open on 15 January, so the earlier chapter stays active that day.
+ */
 export function activePhaseId(day: string): string | null {
   if (day < TRIP_START || day > TRIP_END) return null;
   let chosen: TripPhase | null = null;
   for (const phase of PHASES) {
     if (day >= phase.start && day <= phase.end) {
-      if (!chosen || phase.start >= chosen.start) chosen = phase;
+      if (!chosen || phase.start > chosen.start) chosen = phase;
     }
   }
   return chosen?.id ?? null;
