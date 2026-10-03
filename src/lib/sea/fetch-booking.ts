@@ -87,12 +87,23 @@ export async function fetchPublicHtml(raw: string): Promise<string> {
       throw new Error("The page did not open. Fill the fields by hand.");
     }
     const type = response.headers.get("content-type") ?? "";
+    if (/^image\/(png|jpe?g|webp)/i.test(type)) {
+      await response.body?.cancel().catch(() => undefined);
+      throw new ImageReceiptError();
+    }
     if (!/text\/html|application\/xhtml|application\/json|text\/plain/i.test(type) && type.length > 0) {
       throw new Error("That page is not readable text. Fill the fields by hand.");
     }
     return readLimited(response);
   }
   throw new Error("The link redirected too many times.");
+}
+
+export class ImageReceiptError extends Error {
+  constructor() {
+    super("Image receipt");
+    this.name = "ImageReceiptError";
+  }
 }
 
 export { isPrivateIp };

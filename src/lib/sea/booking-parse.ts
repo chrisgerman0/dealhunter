@@ -10,6 +10,9 @@ export interface BookingFields {
   confirmation?: string;
   flightNumber?: string;
   detail?: string;
+  /** Set only when the page states a GBP amount. Never guessed. */
+  price?: number;
+  receiptUrl?: string;
 }
 
 export type BookingKind = "flight" | "stay";
@@ -85,7 +88,10 @@ function queryDate(params: URLSearchParams, names: string[]): string | undefined
 function mergeFields(base: BookingFields, extra: BookingFields): BookingFields {
   const next: BookingFields = { ...base };
   (Object.keys(extra) as (keyof BookingFields)[]).forEach((key) => {
-    if (!next[key] && extra[key]) next[key] = extra[key];
+    const incoming = extra[key];
+    const current = next[key];
+    if (incoming == null || incoming === "") return;
+    if (current == null || current === "") Object.assign(next, { [key]: incoming });
   });
   return next;
 }
@@ -188,6 +194,7 @@ function readJsonLd(html: string): BookingFields {
           fields.endDate = fields.endDate ?? arrive.date;
           fields.flightNumber = fields.flightNumber ?? textOf(flight.flightNumber);
           fields.confirmation = fields.confirmation ?? textOf(node.reservationNumber);
+          fields.price = fields.price ?? readStructuredPrice(node) ?? readStructuredPrice(flight);
         }
         if (hasType(node, "lodging") || hasType(node, "hotel") || hasType(node, "accommodation")) {
           const place = asRecord(node.reservationFor) ?? node;
@@ -198,6 +205,7 @@ function readJsonLd(html: string): BookingFields {
           fields.endDate = fields.endDate ?? checkOut.date;
           fields.checkInTime = fields.checkInTime ?? checkIn.time;
           fields.confirmation = fields.confirmation ?? textOf(node.reservationNumber);
+          fields.price = fields.price ?? readStructuredPrice(node) ?? (place ? readStructuredPrice(place) : undefined);
         }
       });
     } catch {
@@ -228,6 +236,8 @@ function readVisibleText(html: string): BookingFields {
   const text = html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*$/gi, " ")
+    .replace(/<style[\s\S]*$/gi, " ")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
@@ -246,6 +256,8 @@ function readVisibleText(html: string): BookingFields {
   if (arrives) fields.arriveTime = arrives[1].padStart(5, "0");
   const checkIn = text.match(/\bcheck[- ]?in(?:\s+time)?\s*(?:from|at|:)?\s*(\d{1,2}:\d{2})\b/i);
   if (checkIn) fields.checkInTime = checkIn[1].padStart(5, "0");
+  const price = readClearGbpPrice(text);
+  if (price != null) fields.price = price;
   return fields;
 }
 
@@ -256,8 +268,60 @@ export function parseBookingHtml(html: string): BookingFields {
   return merged;
 }
 
+export function isDirectImageUrl(raw: string): boolean {
+  try {
+    return /\.(png|jpe?g|webp)$/i.test(new URL(raw).pathname);
+  } catch {
+    return false;
+  }
+}
+
+function parseGbpAmount(raw: string): number | undefined {
+  const value = Number(raw.replace(/,/g, "").replace(/£|\s|gbp/gi, ""));
+  if (!Number.isFinite(value) || value <= 0 || value > 1_000_000) return undefined;
+  return Math.round(value * 100) / 100;
+}
+
+function priceFromRecord(node: Record<string, unknown> | null): number | undefined {
+  if (!node || node.price == null) return undefined;
+  const currency = String(node.priceCurrency ?? node.currency ?? "").toUpperCase();
+  if (currency !== "GBP") return undefined;
+  return parseGbpAmount(String(node.price));
+}
+
+function readStructuredPrice(node: Record<string, unknown>): number | undefined {
+  const direct = priceFromRecord(node);
+  if (direct != null) return direct;
+  const offer = asRecord(node.offers);
+  const fromOffer = priceFromRecord(offer);
+  if (fromOffer != null) return fromOffer;
+  for (const item of asList(node.offers)) {
+    const amount = priceFromRecord(asRecord(item));
+    if (amount != null) return amount;
+  }
+  return undefined;
+}
+
+const GBP_AMOUNT = String.raw`([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?|[0-9]+(?:\.[0-9]{2})?)`;
+
+/**
+ * A visible GBP amount only when the page labels it as the total, fare, or price.
+ * A lone £ figure is not enough: search pages often mention an unrelated amount.
+ */
+export function readClearGbpPrice(text: string): number | undefined {
+  const labeled = text.match(
+    new RegExp(
+      `(?:grand total|total(?:\\s+price)?|fare|ticket price|price|amount due)\\s*[:\\-]?\\s*(?:(?:GBP|£)\\s*${GBP_AMOUNT}|${GBP_AMOUNT}\\s*GBP)`,
+      "i"
+    )
+  );
+  if (!labeled) return undefined;
+  return parseGbpAmount(labeled[1] ?? labeled[2]);
+}
+
 export function combineBooking(url: string, html: string | null): BookingFields {
   const fromUrl = parseBookingUrl(url);
+  if (isDirectImageUrl(url)) fromUrl.receiptUrl = url;
   if (!html) return fromUrl;
   return mergeFields(parseBookingHtml(html), fromUrl);
 }
