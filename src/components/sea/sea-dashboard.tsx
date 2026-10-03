@@ -1,483 +1,360 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import {
-  AlertTriangle,
-  ArrowLeft,
-  Check,
-  Hotel,
-  Luggage,
-  Plane,
-  Stamp,
-  Sun,
-} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
+  COUNTRY_COUNT,
+  MILESTONES,
   PHASES,
+  TRIP_END,
+  TRIP_SPAN_DAYS,
+  TRIP_START,
   TRIP_TITLE,
   VISA_ALERTS,
   activePhaseId,
-  checklistGroups,
+  addDays,
+  clampToRoute,
+  dayNumber,
   daysBetween,
+  formatAxisDate,
   formatLongDate,
-  phaseStatus,
-  routeProgress,
+  progressFor,
   tripWindow,
-  type PhaseStatus,
-  type TripPhase,
 } from "@/data/sea-trip";
-
-const CHECKS_KEY = "dealhunter.sea.checklist.v1";
-
-const cardClass =
-  "rounded-2xl border border-slate-800 bg-slate-900/80 p-5 transition duration-200 hover:z-10 hover:scale-[1.02] hover:border-slate-700 motion-reduce:transition-none motion-reduce:hover:scale-100";
-
-function pluralDays(count: number): string {
-  const n = Math.abs(count);
-  return `${n} ${n === 1 ? "day" : "days"}`;
-}
-
-function statusWord(status: PhaseStatus): string {
-  if (status === "active") return "Now";
-  if (status === "complete") return "Done";
-  return "Ahead";
-}
+import { EMPTY_SEA_LOG, expenseTotal, formatMoney, readSeaLog, writeSeaLog, type SeaLog } from "@/lib/sea/log";
+import { BookingsPanel, SpendPanel } from "@/components/sea/sea-log";
 
 export function SeaDashboard({ today }: { today: string }) {
-  const routeState = tripWindow(today);
-  const activeId = activePhaseId(today);
-  const progress = routeProgress(today);
-  const [selectedId, setSelectedId] = useState(activeId ?? PHASES[0].id);
-  const [noteTab, setNoteTab] = useState<"weather" | "packing">("weather");
-  const [checked, setChecked] = useState<Record<string, boolean>>({});
-  const [checksReady, setChecksReady] = useState(false);
+  const [clock, setClock] = useState(today);
+  const [log, setLog] = useState<SeaLog>(EMPTY_SEA_LOG);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(CHECKS_KEY);
-      if (raw) {
-        const parsed: unknown = JSON.parse(raw);
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-          setChecked(parsed as Record<string, boolean>);
-        }
-      }
-    } catch {
-      // Ignore unreadable checklist storage.
-    }
-    setChecksReady(true);
+    setLog(readSeaLog());
+    setReady(true);
   }, []);
 
   useEffect(() => {
-    if (!checksReady) return;
-    window.localStorage.setItem(CHECKS_KEY, JSON.stringify(checked));
-  }, [checked, checksReady]);
+    if (!ready) return;
+    writeSeaLog(log);
+  }, [log, ready]);
 
-  const selected = PHASES.find((phase) => phase.id === selectedId) ?? PHASES[0];
+  const windowState = tripWindow(clock);
+  const activeId = activePhaseId(clock);
   const active = PHASES.find((phase) => phase.id === activeId) ?? null;
-  const departureIn = daysBetween(today, PHASES[0].start);
-  const elapsed = daysBetween(PHASES[0].start, today);
-
-  function toggleCheck(id: string) {
-    setChecked((current) => ({ ...current, [id]: !current[id] }));
-  }
-
-  let statusLine = "Upcoming";
-  let statusDetail = `Departs ${formatLongDate(PHASES[0].start)}. No phase is active yet.`;
-  if (routeState === "underway" && active) {
-    statusLine = `Now · ${active.city}`;
-    statusDetail = `Day ${elapsed + 1} on the route.`;
-  } else if (routeState === "complete") {
-    statusLine = "Complete";
-    statusDetail = `The route closed on ${formatLongDate(PHASES[PHASES.length - 1].end)}.`;
-  } else if (departureIn > 0) {
-    statusDetail = `${pluralDays(departureIn)} until departure. No phase is active yet.`;
-  }
+  const number = dayNumber(clock);
+  const until = daysBetween(clock, TRIP_START);
+  const total = expenseTotal(log.expenses);
 
   return (
-    <div className="relative min-h-screen bg-slate-950 text-slate-100">
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-[radial-gradient(ellipse_at_top,rgba(16,185,129,0.14),transparent_60%)]"
-        aria-hidden
-      />
-      <div className="relative mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
-        <div className="flex items-center justify-between gap-4">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 text-sm text-slate-400 transition-colors hover:text-slate-100"
-          >
-            <ArrowLeft className="size-4" />
-            Deal Hunter
-          </Link>
-          <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-slate-500">
-            Today · {formatLongDate(today)}
-          </p>
-        </div>
-
-        <header className="mt-8 max-w-3xl">
-          <p className="text-xs font-medium uppercase tracking-[0.22em] text-slate-400">
-            Chris Germano
-          </p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-50 sm:text-5xl">
-            {TRIP_TITLE}
-          </h1>
-          <p className="mt-4 text-sm leading-relaxed text-slate-400 sm:text-base">
-            {formatLongDate(PHASES[0].start)} to {formatLongDate(PHASES[PHASES.length - 1].end)}. Eight
-            phases from Dubai to Bali.
-          </p>
-          <div className="mt-5 flex flex-wrap items-center gap-3">
-            <span
-              data-trip-window={routeState}
-              className={cn(
-                "inline-flex items-center rounded-full border px-3 py-1 text-sm font-medium",
-                routeState === "underway"
-                  ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300"
-                  : "border-slate-700 bg-slate-900 text-slate-200"
-              )}
-            >
-              {statusLine}
-            </span>
-            <span className="text-sm text-slate-400">{statusDetail}</span>
+    <div className="bg-[#f6f4ef] text-stone-950 max-lg:min-h-[calc(100dvh-3.5rem)] lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden">
+      <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-4 px-4 py-4 sm:px-6 lg:min-h-0 lg:flex-1 lg:py-5">
+        <header className="shrink-0">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Private itinerary</p>
+          <div className="mt-1 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <h1 className="font-serif text-4xl tracking-tight text-stone-950 sm:text-5xl">{TRIP_TITLE}</h1>
+              <p className="mt-2 max-w-3xl text-sm text-stone-600 sm:text-base">
+                A closed circuit from the Gulf to the islands. Dubai, Thailand, Vietnam, Kuala Lumpur, and Bali,{" "}
+                {formatLongDate(TRIP_START)} – {formatLongDate(TRIP_END)}.
+              </p>
+            </div>
           </div>
+          <dl className="mt-4 flex flex-wrap gap-x-8 gap-y-2">
+            <Stat label="Span" value={`${TRIP_SPAN_DAYS} days`} />
+            <Stat label="Chapters" value={String(PHASES.length)} />
+            <Stat label="Countries" value={String(COUNTRY_COUNT)} />
+            <Stat label="Spend" value={formatMoney(total, log.currency)} />
+          </dl>
+          <p className="mt-3 text-sm text-stone-500">{PHASES.map((phase) => phase.city).join(" · ")}</p>
         </header>
 
-        <ProgressTimeline
-          today={today}
-          activeId={activeId}
-          selectedId={selected.id}
-          progress={progress}
-          onSelect={setSelectedId}
-        />
-
-        <div className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(20rem,1fr)]">
-          <ItineraryFeed today={today} activeId={activeId} />
-          <div className="space-y-6">
-            <VisaWidget today={today} />
-            <PhaseChecklist phase={selected} checked={checked} onToggle={toggleCheck} />
-            <WeatherPacking phase={selected} tab={noteTab} onTab={setNoteTab} />
+        <div className="grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1.25fr)_minmax(22rem,0.78fr)] lg:grid-rows-[minmax(0,1fr)_17.5rem]">
+          <ClockCard clock={clock} today={today} onClock={setClock} className="lg:col-start-1 lg:row-start-1" />
+          <VisaCard clock={clock} today={today} className="lg:col-start-2 lg:row-start-1" />
+          <div className="lg:col-start-1 lg:row-start-2 lg:h-full lg:min-h-0">
+            <BookingsPanel log={log} onChange={setLog} />
+          </div>
+          <div className="lg:col-start-2 lg:row-start-2 lg:h-full lg:min-h-0">
+            <SpendPanel log={log} today={today} onChange={setLog} />
           </div>
         </div>
+        <p className="sr-only">
+          {windowState === "upcoming"
+            ? `Upcoming. ${until} days until departure. No chapter is active yet.`
+            : active
+              ? `Viewing ${active.city}. Day ${number} of ${TRIP_SPAN_DAYS}.`
+              : "Route complete."}
+        </p>
       </div>
     </div>
   );
 }
 
-function ProgressTimeline({
-  today,
-  activeId,
-  selectedId,
-  progress,
-  onSelect,
-}: {
-  today: string;
-  activeId: string | null;
-  selectedId: string;
-  progress: number;
-  onSelect: (id: string) => void;
-}) {
+function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <section className="mt-10" aria-labelledby="sea-timeline-heading">
-      <div className="mb-4 flex items-end justify-between gap-4">
+    <div>
+      <dt className="text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-500">{label}</dt>
+      <dd className="font-serif text-xl text-stone-950">{value}</dd>
+    </div>
+  );
+}
+
+function ClockCard({
+  clock,
+  today,
+  onClock,
+  className,
+}: {
+  clock: string;
+  today: string;
+  onClock: (day: string) => void;
+  className?: string;
+}) {
+  const state = tripWindow(clock);
+  const activeId = activePhaseId(clock);
+  const active = PHASES.find((phase) => phase.id === activeId) ?? null;
+  const number = dayNumber(clock);
+  const until = Math.max(0, daysBetween(clock, TRIP_START));
+  const thumb =
+    clock < TRIP_START ? 0 : clock > TRIP_END ? 100 : (daysBetween(TRIP_START, clock) / (TRIP_SPAN_DAYS - 1)) * 100;
+  const percent = Math.round(progressFor(clock) * 100);
+  const trackRef = useRef<HTMLDivElement>(null);
+
+  function moveTo(clientX: number) {
+    const rect = trackRef.current?.getBoundingClientRect();
+    if (!rect || rect.width === 0) return;
+    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    const index = Math.round(ratio * (TRIP_SPAN_DAYS - 1));
+    onClock(addDays(TRIP_START, index));
+  }
+
+  function nudge(delta: number) {
+    if (clock < TRIP_START) {
+      if (delta > 0) onClock(TRIP_START);
+      return;
+    }
+    if (clock > TRIP_END) {
+      if (delta < 0) onClock(TRIP_END);
+      return;
+    }
+    const next = addDays(clock, delta);
+    if (next < TRIP_START) onClock(today < TRIP_START ? today : TRIP_START);
+    else if (next > TRIP_END) onClock(TRIP_END);
+    else onClock(next);
+  }
+
+  return (
+    <section
+      className={cn(
+        "flex min-h-0 flex-col overflow-y-auto rounded-3xl border border-stone-200 bg-white p-5 shadow-[0_18px_40px_-28px_rgba(28,25,23,0.45)] [scrollbar-color:#d6d3d1_transparent] [scrollbar-width:thin] sm:p-6",
+        className
+      )}
+      aria-labelledby="sea-clock-heading"
+    >
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 id="sea-timeline-heading" className="text-sm font-medium uppercase tracking-[0.18em] text-slate-400">
-            Progress timeline
-          </h2>
-          <p className="mt-1 text-sm text-slate-500">
-            {progress === 0
-              ? "The route has not started."
-              : `${Math.round(progress * 100)}% of the way from Dubai to the end of Bali.`}
+          <p id="sea-clock-heading" className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
+            {state === "upcoming" ? "Before departure" : state === "complete" ? "Route closed" : active?.country}
+          </p>
+          <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-1">
+            {state === "upcoming" ? (
+              <p className="font-serif text-6xl leading-none tracking-tight text-stone-950 sm:text-7xl">{until}</p>
+            ) : (
+              <p className="font-serif text-6xl leading-none tracking-tight text-stone-950 sm:text-7xl">
+                {state === "complete" ? "Done" : `Day ${number}`}
+              </p>
+            )}
+            <p className="pb-1 text-lg text-stone-500">
+              {state === "upcoming" ? "days until departure" : `of ${TRIP_SPAN_DAYS}`}
+            </p>
+          </div>
+          <p className={cn("mt-3 text-3xl font-medium tracking-tight", active ? "text-emerald-700" : "text-stone-700")}>
+            {state === "upcoming" ? "No chapter is active yet" : state === "complete" ? formatLongDate(TRIP_END) : active?.city}
+          </p>
+          <p className="mt-1 text-sm text-stone-500">
+            {state === "underway" && active
+              ? `${active.dateLabel}. ${active.note}`
+              : state === "upcoming"
+                ? `Departs ${formatLongDate(TRIP_START)}. Drag the clock to preview a chapter.`
+                : "The route has closed."}
           </p>
         </div>
+        <p className="font-serif text-5xl tracking-tight text-emerald-700">{percent}%</p>
       </div>
-      <ol className="flex gap-3 overflow-x-auto pb-2">
+
+      <div className="mt-6">
+        <div
+          ref={trackRef}
+          role="slider"
+          tabIndex={0}
+          aria-label="Trip clock"
+          aria-valuemin={0}
+          aria-valuemax={TRIP_SPAN_DAYS - 1}
+          aria-valuenow={clock < TRIP_START ? 0 : daysBetween(TRIP_START, clampToRoute(clock))}
+          aria-valuetext={formatLongDate(clock)}
+          className="relative h-10 cursor-pointer touch-none outline-none focus-visible:ring-2 focus-visible:ring-emerald-700/40"
+          onPointerDown={(event) => {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            moveTo(event.clientX);
+          }}
+          onPointerMove={(event) => {
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) moveTo(event.clientX);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowRight" || event.key === "ArrowUp") {
+              event.preventDefault();
+              nudge(event.shiftKey ? 7 : 1);
+            } else if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
+              event.preventDefault();
+              nudge(event.shiftKey ? -7 : -1);
+            } else if (event.key === "Home") {
+              event.preventDefault();
+              onClock(today < TRIP_START ? today : TRIP_START);
+            } else if (event.key === "End") {
+              event.preventDefault();
+              onClock(TRIP_END);
+            }
+          }}
+        >
+          <div className="absolute top-1/2 right-0 left-0 h-1.5 -translate-y-1/2 rounded-full bg-stone-200" />
+          <div
+            className="absolute top-1/2 left-0 h-1.5 -translate-y-1/2 rounded-full bg-emerald-600"
+            style={{ width: `${thumb}%` }}
+          />
           {PHASES.map((phase) => {
-            const status = phaseStatus(phase, today, activeId);
-            const selected = phase.id === selectedId;
+            const left = (daysBetween(TRIP_START, phase.start) / (TRIP_SPAN_DAYS - 1)) * 100;
             return (
-              <li key={phase.id} className="min-w-[11.5rem] flex-1">
-                <button
-                  type="button"
-                  onClick={() => onSelect(phase.id)}
-                  aria-pressed={selected}
-                  className={cn(
-                    "flex h-full w-full flex-col rounded-2xl border px-3 py-3 text-left transition duration-200 hover:scale-[1.02] motion-reduce:transition-none motion-reduce:hover:scale-100",
-                    status === "active"
-                      ? "border-emerald-500 bg-emerald-500/10"
-                      : "border-slate-800 bg-slate-900/80 hover:border-slate-700",
-                    selected && status !== "active" && "ring-1 ring-slate-500"
-                  )}
-                >
-                  <span className="flex items-center gap-2">
-                    <span
-                      className={cn(
-                        "size-2.5 rounded-full",
-                        status === "active" ? "bg-emerald-400" : "bg-slate-600"
-                      )}
-                      aria-hidden
-                    />
-                    <span
-                      className={cn(
-                        "text-[11px] font-medium uppercase tracking-[0.14em]",
-                        status === "active" ? "text-emerald-300" : "text-slate-500"
-                      )}
-                    >
-                      {statusWord(status)}
-                    </span>
-                  </span>
-                  <span className="mt-3 block text-sm font-medium text-slate-50">{phase.city}</span>
-                  <span className="mt-1 block text-xs leading-snug text-slate-400">{phase.dateLabel}</span>
-                </button>
-              </li>
+              <span
+                key={phase.id}
+                className={cn(
+                  "absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full",
+                  left <= thumb ? "bg-emerald-700" : "bg-stone-300"
+                )}
+                style={{ left: `${left}%` }}
+              />
             );
           })}
-        </ol>
-      <div
-        className="mt-4 h-1 overflow-hidden rounded-full bg-slate-800"
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(progress * 100)}
-        aria-label="Route progress"
-      >
-        <div className="h-full rounded-full bg-emerald-500" style={{ width: `${progress * 100}%` }} />
+          <span
+            className="absolute top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-emerald-700 bg-white shadow"
+            style={{ left: `${thumb}%` }}
+          />
+        </div>
+        <div className="mt-1 flex items-center justify-between text-[10px] font-semibold tracking-[0.16em] text-stone-400">
+          <span>{formatAxisDate(TRIP_START)}</span>
+          <span>Drag to move the clock</span>
+          <span>{formatAxisDate(TRIP_END)}</span>
+        </div>
       </div>
-    </section>
-  );
-}
 
-function ItineraryFeed({ today, activeId }: { today: string; activeId: string | null }) {
-  return (
-    <section aria-labelledby="sea-itinerary-heading">
-      <h2 id="sea-itinerary-heading" className="text-sm font-medium uppercase tracking-[0.18em] text-slate-400">
-        Itinerary
-      </h2>
-      <ol className="mt-4 space-y-4">
+      <div className="mt-4 flex flex-wrap gap-2">
         {PHASES.map((phase) => {
-          const status = phaseStatus(phase, today, activeId);
+          const on = phase.id === activeId;
           return (
-            <li key={phase.id}>
-              <article
-                className={cn(
-                  cardClass,
-                  status === "active" && "border-emerald-500/80 bg-emerald-500/10"
-                )}
-              >
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <h3 className="text-lg font-medium text-slate-50">{phase.city}</h3>
-                  <span
-                    className={cn(
-                      "text-xs font-medium uppercase tracking-[0.14em]",
-                      status === "active" ? "text-emerald-300" : "text-slate-500"
-                    )}
-                  >
-                    {statusWord(status)}
-                  </span>
-                </div>
-                <p className="mt-1 text-sm text-slate-400">
-                  {phase.country} · {phase.dateLabel}
-                </p>
-                <p className="mt-3 text-sm leading-relaxed text-slate-300">{phase.summary}</p>
-                <ul className="mt-4 space-y-3 border-t border-slate-800 pt-4">
-                  {phase.itinerary.map((entry) => (
-                    <li key={entry.title}>
-                      <p className="text-sm font-medium text-slate-100">{entry.title}</p>
-                      <p className="mt-0.5 text-sm leading-relaxed text-slate-400">{entry.detail}</p>
-                    </li>
-                  ))}
-                </ul>
-              </article>
-            </li>
+            <button
+              key={phase.id}
+              type="button"
+              onClick={() => onClock(phase.start)}
+              className={cn(
+                "rounded-2xl border px-3 py-2 text-left transition",
+                on ? "border-emerald-700 bg-emerald-700 text-white" : "border-stone-200 bg-white text-stone-800 hover:border-stone-400"
+              )}
+            >
+              <span className={cn("block text-[10px] uppercase tracking-[0.14em]", on ? "text-emerald-100" : "text-stone-500")}>
+                {phase.country}
+              </span>
+              <span className="mt-1 block text-sm font-medium">{phase.chip}</span>
+              <span className={cn("mt-0.5 block text-[11px]", on ? "text-emerald-50" : "text-stone-500")}>{phase.dateLabel}</span>
+            </button>
           );
         })}
-      </ol>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        {MILESTONES.map((milestone) => {
+          const on = milestone.date == null ? clock < TRIP_START : clock === milestone.date;
+          return (
+            <button
+              key={milestone.id}
+              type="button"
+              onClick={() => onClock(milestone.date ?? (today < TRIP_START ? today : addDays(TRIP_START, -1)))}
+              className={cn(
+                "rounded-full border px-3 py-1 text-xs",
+                on ? "border-emerald-700 bg-emerald-50 text-emerald-900" : "border-stone-200 text-stone-600 hover:border-stone-400"
+              )}
+            >
+              {milestone.label}
+            </button>
+          );
+        })}
+        <label className="ml-auto flex items-center gap-2 text-xs text-stone-500">
+          As of
+          <input
+            type="date"
+            value={clock}
+            onChange={(event) => {
+              if (event.target.value) onClock(event.target.value);
+            }}
+            className="rounded-full border border-stone-200 bg-white px-2 py-1 text-stone-800"
+          />
+        </label>
+        <button
+          type="button"
+          onClick={() => onClock(today)}
+          className="rounded-full border border-stone-300 px-3 py-1 text-xs font-medium text-stone-700"
+        >
+          Today
+        </button>
+      </div>
+      <p className="mt-3 text-xs text-stone-500">
+        {state === "underway" && active
+          ? `Emerald marks the chapter this date falls in. Viewing ${active.city}.`
+          : state === "upcoming"
+            ? "Emerald marks the chapter this date falls in. Nothing is active before 15 January 2027."
+            : "The clock is after the last day in Bali."}
+      </p>
     </section>
   );
 }
 
-function VisaWidget({ today }: { today: string }) {
+function VisaCard({ clock, today, className }: { clock: string; today: string; className?: string }) {
   return (
-    <section aria-labelledby="sea-visa-heading">
-      <h2 id="sea-visa-heading" className="text-sm font-medium uppercase tracking-[0.18em] text-amber-300/90">
-        Visa alerts
+    <section
+      className={cn(
+        "flex min-h-0 flex-col overflow-y-auto rounded-3xl border border-stone-200 bg-white p-5 shadow-[0_18px_40px_-28px_rgba(28,25,23,0.45)] [scrollbar-color:#d6d3d1_transparent] [scrollbar-width:thin] sm:p-6",
+        className
+      )}
+      aria-labelledby="sea-visa-heading"
+    >
+      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700">Visa windows</p>
+      <h2 id="sea-visa-heading" className="mt-2 font-serif text-3xl tracking-tight text-stone-950">
+        Two dates that cannot slip
       </h2>
+      <p className="mt-2 text-sm text-stone-500">
+        {clock === today
+          ? `Counted from today, ${formatLongDate(clock)}.`
+          : `Counted from the trip clock, ${formatLongDate(clock)}.`}
+      </p>
       <ul className="mt-4 space-y-3">
         {VISA_ALERTS.map((alert) => {
-          const remaining = daysBetween(today, alert.due);
-          let timing = `Due in ${pluralDays(remaining)}`;
-          if (remaining === 0) timing = "Due today";
-          if (remaining < 0) timing = `${pluralDays(remaining)} past the deadline`;
+          const remaining = daysBetween(clock, alert.due);
+          const headline = remaining === 0 ? "Today" : String(Math.abs(remaining));
+          const caption = remaining === 0 ? "Due" : remaining > 0 ? "Days until" : "Days past";
           return (
-            <li key={alert.id}>
-              <article className={cn(cardClass, "border-amber-500/40 bg-amber-500/10")}>
-                <div className="flex gap-3">
-                  <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-300" aria-hidden />
-                  <div>
-                    <p className="text-sm font-medium leading-snug text-amber-100">{alert.label}</p>
-                    <p className="mt-2 text-xs text-amber-200/80">{timing}</p>
-                    <p className="mt-2 text-sm leading-relaxed text-amber-100/70">{alert.context}</p>
-                  </div>
-                </div>
-              </article>
+            <li key={alert.id} className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3">
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-semibold leading-snug text-stone-950">{alert.label}</p>
+                <p className="text-right">
+                  <span className="block font-serif text-4xl leading-none text-amber-800">{headline}</span>
+                  <span className="mt-1 block text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-700">{caption}</span>
+                </p>
+              </div>
+              <p className="mt-2 text-sm leading-relaxed text-stone-700">{alert.detail}</p>
             </li>
           );
         })}
       </ul>
-    </section>
-  );
-}
-
-const GROUP_ICONS = {
-  flights: Plane,
-  hotels: Hotel,
-  visas: Stamp,
-} as const;
-
-function PhaseChecklist({
-  phase,
-  checked,
-  onToggle,
-}: {
-  phase: TripPhase;
-  checked: Record<string, boolean>;
-  onToggle: (id: string) => void;
-}) {
-  const groups = checklistGroups(phase);
-  const total = groups.reduce((sum, group) => sum + group.items.length, 0);
-  const done = groups.reduce(
-    (sum, group) => sum + group.items.filter((item) => checked[item.id]).length,
-    0
-  );
-
-  return (
-    <section className={cardClass} aria-labelledby="sea-checklist-heading">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 id="sea-checklist-heading" className="text-sm font-medium uppercase tracking-[0.18em] text-slate-400">
-            Checklist
-          </h2>
-          <p className="mt-2 text-base font-medium text-slate-50">{phase.city}</p>
-          <p className="text-sm text-slate-400">{phase.dateLabel}</p>
-        </div>
-        <p className="text-xs text-slate-500">
-          {done}/{total}
-        </p>
-      </div>
-      <div className="mt-5 space-y-5">
-        {groups.map((group) => {
-          const Icon = GROUP_ICONS[group.key];
-          return (
-            <div key={group.key}>
-              <h3 className="flex items-center gap-2 text-sm font-medium text-slate-100">
-                <Icon className="size-4 text-slate-400" aria-hidden />
-                {group.title}
-              </h3>
-              <ul className="mt-2 space-y-2">
-                {group.items.map((item) => {
-                  const on = Boolean(checked[item.id]);
-                  return (
-                    <li key={item.id}>
-                      <button
-                        type="button"
-                        aria-pressed={on}
-                        onClick={() => onToggle(item.id)}
-                        className="flex w-full items-start gap-3 rounded-xl border border-slate-800 px-3 py-2 text-left text-sm transition-colors hover:border-slate-600"
-                      >
-                        <span
-                          className={cn(
-                            "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border",
-                            on
-                              ? "border-emerald-500 bg-emerald-500 text-slate-950"
-                              : "border-slate-600"
-                          )}
-                          aria-hidden
-                        >
-                          {on ? <Check className="size-3" /> : null}
-                        </span>
-                        <span className={on ? "text-slate-500 line-through" : "text-slate-200"}>
-                          {item.label}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-function WeatherPacking({
-  phase,
-  tab,
-  onTab,
-}: {
-  phase: TripPhase;
-  tab: "weather" | "packing";
-  onTab: (tab: "weather" | "packing") => void;
-}) {
-  return (
-    <section className={cardClass} aria-labelledby="sea-notes-heading">
-      <h2 id="sea-notes-heading" className="text-sm font-medium uppercase tracking-[0.18em] text-slate-400">
-        Weather and packing
-      </h2>
-      <p className="mt-2 text-sm text-slate-400">
-        Notes for {phase.city}, with the rest of the route underneath.
-      </p>
-      <div className="mt-4 flex gap-1 rounded-xl border border-slate-800 bg-slate-950/70 p-1" role="tablist" aria-label="Weather and packing">
-        <button
-          type="button"
-          role="tab"
-          id="sea-tab-weather"
-          aria-selected={tab === "weather"}
-          aria-controls="sea-panel-notes"
-          className={cn(
-            "inline-flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium",
-            tab === "weather" ? "bg-slate-800 text-slate-50" : "text-slate-400 hover:text-slate-200"
-          )}
-          onClick={() => onTab("weather")}
-        >
-          <Sun className="size-4" aria-hidden />
-          Weather
-        </button>
-        <button
-          type="button"
-          role="tab"
-          id="sea-tab-packing"
-          aria-selected={tab === "packing"}
-          aria-controls="sea-panel-notes"
-          className={cn(
-            "inline-flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium",
-            tab === "packing" ? "bg-slate-800 text-slate-50" : "text-slate-400 hover:text-slate-200"
-          )}
-          onClick={() => onTab("packing")}
-        >
-          <Luggage className="size-4" aria-hidden />
-          Packing
-        </button>
-      </div>
-      <div role="tabpanel" id="sea-panel-notes" aria-labelledby={tab === "weather" ? "sea-tab-weather" : "sea-tab-packing"} className="mt-4">
-        <ul className="space-y-3">
-          {PHASES.map((item) => {
-            const note = tab === "weather" ? item.weather : item.packing;
-            const viewing = item.id === phase.id;
-            return (
-              <li
-                key={item.id}
-                className={cn(
-                  "rounded-xl border px-3 py-3",
-                  viewing ? "border-emerald-500/40 bg-emerald-500/5" : "border-slate-800"
-                )}
-              >
-                <p className="text-sm font-medium text-slate-100">{item.city}</p>
-                <p className="mt-1 text-sm leading-relaxed text-slate-400">{note}</p>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
+      <p className="mt-4 text-xs text-stone-500">Planning aid for this itinerary, not immigration advice.</p>
     </section>
   );
 }
