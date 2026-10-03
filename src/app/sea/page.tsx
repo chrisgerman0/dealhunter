@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Header } from "@/components/layout/header";
 import { SeaDashboard } from "@/components/sea/sea-dashboard";
 import { TRIP_TITLE, utcTodayIso } from "@/data/sea-trip";
 
@@ -11,5 +12,10 @@ export const metadata: Metadata = {
 };
 
 export default function SeaTripPage() {
-  return <SeaDashboard today={utcTodayIso()} />;
+  return (
+    <div className="flex min-h-dvh flex-col bg-[#f6f4ef] lg:h-dvh lg:overflow-hidden">
+      <Header />
+      <SeaDashboard today={utcTodayIso()} />
+    </div>
+  );
 }
