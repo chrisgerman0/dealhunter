@@ -47,16 +47,22 @@ export function SeaDashboard({ today }: { today: string }) {
   const total = expenseTotal(log.expenses);
 
   return (
-    <div className="bg-[#f6f4ef] text-stone-950 max-lg:min-h-[calc(100dvh-3.5rem)] lg:flex lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-hidden">
-      <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-4 px-4 py-4 sm:px-6 lg:min-h-0 lg:flex-1 lg:py-5">
-        <header className="shrink-0">
+    <div className="min-h-screen bg-[#f6f4ef] text-stone-950">
+      <div className="border-b border-stone-200/80">
+        <div className="mx-auto flex h-14 max-w-[1440px] items-center gap-3 px-4 sm:px-6">
+          <SeaMark />
+          <p className="text-sm font-semibold tracking-tight text-stone-950">{TRIP_TITLE}</p>
+        </div>
+      </div>
+      <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-8 px-4 py-8 sm:px-6 lg:py-10">
+        <header>
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Private itinerary</p>
           <div className="mt-1 flex flex-wrap items-end justify-between gap-4">
             <div>
               <h1 className="font-serif text-4xl tracking-tight text-stone-950 sm:text-5xl">{TRIP_TITLE}</h1>
               <p className="mt-2 max-w-3xl text-sm text-stone-600 sm:text-base">
-                A closed circuit from the Gulf to the islands. Dubai, Thailand, Vietnam, Kuala Lumpur, and Bali,{" "}
-                {formatLongDate(TRIP_START)} – {formatLongDate(TRIP_END)}.
+                Departs Manchester for Dubai on {formatLongDate(TRIP_START)}, then Thailand, Vietnam, Kuala Lumpur, and
+                Bali through {formatLongDate(TRIP_END)}.
               </p>
             </div>
           </div>
@@ -69,15 +75,13 @@ export function SeaDashboard({ today }: { today: string }) {
           <p className="mt-3 text-sm text-stone-500">{PHASES.map((phase) => phase.city).join(" · ")}</p>
         </header>
 
-        <div className="grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1.25fr)_minmax(22rem,0.78fr)] lg:grid-rows-[minmax(0,1fr)_17.5rem]">
-          <ClockCard clock={clock} today={today} onClock={setClock} className="lg:col-start-1 lg:row-start-1" />
-          <VisaCard clock={clock} today={today} className="lg:col-start-2 lg:row-start-1" />
-          <div className="lg:col-start-1 lg:row-start-2 lg:h-full lg:min-h-0">
-            <BookingsPanel log={log} onChange={setLog} />
-          </div>
-          <div className="lg:col-start-2 lg:row-start-2 lg:h-full lg:min-h-0">
-            <SpendPanel log={log} today={today} onChange={setLog} />
-          </div>
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.75fr)]">
+          <ClockCard clock={clock} today={today} onClock={setClock} />
+          <VisaCard clock={clock} today={today} />
+        </div>
+        <div className="grid items-start gap-6 lg:grid-cols-2">
+          <BookingsPanel log={log} onChange={setLog} />
+          <SpendPanel log={log} today={today} onChange={setLog} />
         </div>
         <p className="sr-only">
           {windowState === "upcoming"
@@ -88,6 +92,16 @@ export function SeaDashboard({ today }: { today: string }) {
         </p>
       </div>
     </div>
+  );
+}
+
+function SeaMark() {
+  return (
+    <svg viewBox="0 0 32 32" className="size-8 shrink-0" aria-hidden>
+      <circle cx="16" cy="16" r="15" fill="#047857" />
+      <path d="M7 19.5c3.2-5 6.6-7.5 9-7.5s5.8 2.5 9 7.5" fill="none" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
+      <circle cx="16" cy="11.2" r="1.7" fill="white" />
+    </svg>
   );
 }
 
@@ -147,7 +161,7 @@ function ClockCard({
   return (
     <section
       className={cn(
-        "flex min-h-0 flex-col overflow-y-auto rounded-3xl border border-stone-200 bg-white p-5 shadow-[0_18px_40px_-28px_rgba(28,25,23,0.45)] [scrollbar-color:#d6d3d1_transparent] [scrollbar-width:thin] sm:p-6",
+        "rounded-3xl border border-stone-200 bg-white p-5 shadow-[0_18px_40px_-28px_rgba(28,25,23,0.45)] sm:p-6",
         className
       )}
       aria-labelledby="sea-clock-heading"
@@ -155,7 +169,7 @@ function ClockCard({
       <div className="flex items-start justify-between gap-4">
         <div>
           <p id="sea-clock-heading" className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
-            {state === "upcoming" ? "Before departure" : state === "complete" ? "Route closed" : active?.country}
+            {state === "upcoming" ? "Upcoming" : state === "complete" ? "Route closed" : active?.country}
           </p>
           <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-1">
             {state === "upcoming" ? (
@@ -176,7 +190,7 @@ function ClockCard({
             {state === "underway" && active
               ? `${active.dateLabel}. ${active.note}`
               : state === "upcoming"
-                ? `Departs ${formatLongDate(TRIP_START)}. Drag the clock to preview a chapter.`
+                ? `Departs Manchester for Dubai on ${formatLongDate(TRIP_START)}. Drag the clock to preview a chapter.`
                 : "The route has closed."}
           </p>
         </div>
@@ -321,7 +335,7 @@ function VisaCard({ clock, today, className }: { clock: string; today: string; c
   return (
     <section
       className={cn(
-        "flex min-h-0 flex-col overflow-y-auto rounded-3xl border border-stone-200 bg-white p-5 shadow-[0_18px_40px_-28px_rgba(28,25,23,0.45)] [scrollbar-color:#d6d3d1_transparent] [scrollbar-width:thin] sm:p-6",
+        "rounded-3xl border border-stone-200 bg-white p-5 shadow-[0_18px_40px_-28px_rgba(28,25,23,0.45)] sm:p-6",
         className
       )}
       aria-labelledby="sea-visa-heading"
