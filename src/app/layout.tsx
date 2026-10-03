@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { cn } from "@/lib/utils";
-import { Header } from "@/components/layout/header";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -27,8 +26,7 @@ export default function RootLayout({
     <html lang="en-GB" className={cn("font-sans", geistSans.variable)}>
       <body className="min-h-screen bg-background text-foreground antialiased">
         <TooltipProvider>
-          <Header />
-          <main className="mx-auto min-h-[calc(100vh-3.5rem)] max-w-[1600px]">{children}</main>
+          {children}
           <Toaster richColors position="bottom-right" />
         </TooltipProvider>
       </body>
