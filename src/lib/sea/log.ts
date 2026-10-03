@@ -23,6 +23,9 @@ export interface FlightBooking {
   checkInDetails: string;
   bookingRef: string;
   bookingUrl: string;
+  /** Pounds, when known. Blank stays null and is left out of the flights subtotal. */
+  price: number | null;
+  receiptUrl: string;
 }
 
 export interface StayBooking {
@@ -35,6 +38,9 @@ export interface StayBooking {
   checkInDetails: string;
   bookingRef: string;
   bookingUrl: string;
+  /** Pounds, when known. Blank stays null and is left out of the stays subtotal. */
+  price: number | null;
+  receiptUrl: string;
 }
 
 export type TripBooking = FlightBooking | StayBooking;
@@ -71,6 +77,18 @@ function asText(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+function asPrice(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const amount = typeof value === "number" ? value : Number(String(value).replace(/,/g, ""));
+  if (!Number.isFinite(amount) || amount < 0) return null;
+  return Math.round(amount * 100) / 100;
+}
+
+function asReceipt(value: unknown): string {
+  const text = asText(value).trim();
+  return /^https?:\/\//i.test(text) ? text : "";
+}
+
 function isFlight(value: unknown): value is FlightBooking {
   if (!value || typeof value !== "object") return false;
   const row = value as FlightBooking;
@@ -96,6 +114,8 @@ function normalizeBooking(value: unknown): TripBooking | null {
       checkInDetails: asText(value.checkInDetails),
       bookingRef: asText(value.bookingRef),
       bookingUrl: asText(value.bookingUrl),
+      price: asPrice(value.price),
+      receiptUrl: asReceipt(value.receiptUrl),
     };
   }
   if (isStay(value)) {
@@ -109,6 +129,8 @@ function normalizeBooking(value: unknown): TripBooking | null {
       checkInDetails: asText(value.checkInDetails),
       bookingRef: asText(value.bookingRef),
       bookingUrl: asText(value.bookingUrl),
+      price: asPrice(value.price),
+      receiptUrl: asReceipt(value.receiptUrl),
     };
   }
   return null;
@@ -156,7 +178,32 @@ export function writeSeaLog(log: SeaLog): void {
 }
 
 export function expenseTotal(expenses: TripExpense[]): number {
-  return expenses.reduce((sum, expense) => sum + expense.amount, 0);
+  return roundMoney(expenses.reduce((sum, expense) => sum + expense.amount, 0));
+}
+
+export interface SpendBreakdown {
+  flights: number;
+  stays: number;
+  general: number;
+  total: number;
+}
+
+function roundMoney(amount: number): number {
+  return Math.round(amount * 100) / 100;
+}
+
+function pricedSum(bookings: TripBooking[]): number {
+  return roundMoney(
+    bookings.reduce((sum, booking) => sum + (booking.price == null ? 0 : booking.price), 0)
+  );
+}
+
+/** Flights, stays, and general costs, each in pounds, plus their total. */
+export function spendBreakdown(log: SeaLog): SpendBreakdown {
+  const flights = pricedSum(log.bookings.filter((booking) => booking.kind === "flight"));
+  const stays = pricedSum(log.bookings.filter((booking) => booking.kind === "stay"));
+  const general = expenseTotal(log.expenses);
+  return { flights, stays, general, total: roundMoney(flights + stays + general) };
 }
 
 export function formatMoney(amount: number, currency: TripCurrency): string {

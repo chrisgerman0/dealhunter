@@ -32,6 +32,8 @@ interface FlightDraft {
   checkInDetails: string;
   bookingRef: string;
   bookingUrl: string;
+  price: string;
+  receiptUrl: string;
 }
 
 interface StayDraft {
@@ -42,6 +44,8 @@ interface StayDraft {
   checkInDetails: string;
   bookingRef: string;
   bookingUrl: string;
+  price: string;
+  receiptUrl: string;
 }
 
 const EMPTY_FLIGHT: FlightDraft = {
@@ -53,6 +57,8 @@ const EMPTY_FLIGHT: FlightDraft = {
   checkInDetails: "",
   bookingRef: "",
   bookingUrl: "",
+  price: "",
+  receiptUrl: "",
 };
 
 const EMPTY_STAY: StayDraft = {
@@ -63,10 +69,25 @@ const EMPTY_STAY: StayDraft = {
   checkInDetails: "",
   bookingRef: "",
   bookingUrl: "",
+  price: "",
+  receiptUrl: "",
 };
 
 function keep(value: string | undefined, fallback: string): string {
   return value && value.trim() ? value : fallback;
+}
+
+function priceText(price: number | undefined): string | null {
+  if (price == null || !Number.isFinite(price)) return null;
+  return String(price);
+}
+
+function readPrice(raw: string): number | null | "invalid" {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const value = Number(trimmed.replace(/,/g, ""));
+  if (!Number.isFinite(value) || value < 0) return "invalid";
+  return Math.round(value * 100) / 100;
 }
 
 export function BookingsPanel({
@@ -111,28 +132,49 @@ export function BookingsPanel({
         return;
       }
       const fields = data.fields;
+      const filledPrice = priceText(fields.price);
+      if (data.kind == null) {
+        if (fields.receiptUrl) {
+          if (kind === "flight") setFlight((current) => ({ ...current, receiptUrl: fields.receiptUrl ?? current.receiptUrl }));
+          else setStay((current) => ({ ...current, receiptUrl: fields.receiptUrl ?? current.receiptUrl }));
+        } else if (filledPrice != null) {
+          if (kind === "flight") setFlight((current) => ({ ...current, price: filledPrice }));
+          else setStay((current) => ({ ...current, price: filledPrice }));
+        }
+        setLink(url);
+        setNote(data.note ?? "The amount stays blank unless the page stated a price.");
+        return;
+      }
       if (data.kind === "stay") setKind("stay");
       if (data.kind === "flight") setKind("flight");
-      setFlight((current) => ({
-        ...current,
-        fromAirport: keep(fields.fromAirport, current.fromAirport),
-        toAirport: keep(fields.toAirport, current.toAirport),
-        date: keep(fields.date, current.date),
-        departTime: keep(fields.departTime, current.departTime),
-        arriveTime: keep(fields.arriveTime, current.arriveTime),
-        bookingRef: keep(fields.confirmation, current.bookingRef),
-        bookingUrl: url,
-        checkInDetails: keep(fields.flightNumber ? `Flight ${fields.flightNumber}` : undefined, current.checkInDetails),
-      }));
-      setStay((current) => ({
-        ...current,
-        hotelName: keep(fields.hotelName, current.hotelName),
-        checkInDate: keep(fields.date, current.checkInDate),
-        checkOutDate: keep(fields.endDate, current.checkOutDate),
-        checkInTime: keep(fields.checkInTime, current.checkInTime),
-        bookingRef: keep(fields.confirmation, current.bookingRef),
-        bookingUrl: url,
-      }));
+      if (data.kind === "flight") {
+        setFlight((current) => ({
+          ...current,
+          fromAirport: keep(fields.fromAirport, current.fromAirport),
+          toAirport: keep(fields.toAirport, current.toAirport),
+          date: keep(fields.date, current.date),
+          departTime: keep(fields.departTime, current.departTime),
+          arriveTime: keep(fields.arriveTime, current.arriveTime),
+          bookingRef: keep(fields.confirmation, current.bookingRef),
+          bookingUrl: url,
+          checkInDetails: keep(fields.flightNumber ? `Flight ${fields.flightNumber}` : undefined, current.checkInDetails),
+          price: filledPrice ?? "",
+          receiptUrl: fields.receiptUrl || current.receiptUrl,
+        }));
+      }
+      if (data.kind === "stay") {
+        setStay((current) => ({
+          ...current,
+          hotelName: keep(fields.hotelName, current.hotelName),
+          checkInDate: keep(fields.date, current.checkInDate),
+          checkOutDate: keep(fields.endDate, current.checkOutDate),
+          checkInTime: keep(fields.checkInTime, current.checkInTime),
+          bookingRef: keep(fields.confirmation, current.bookingRef),
+          bookingUrl: url,
+          price: filledPrice ?? "",
+          receiptUrl: fields.receiptUrl || current.receiptUrl,
+        }));
+      }
       setLink(url);
       setNote(data.note ?? "Filled from the link. Change anything before you save it.");
     } catch {
@@ -144,12 +186,31 @@ export function BookingsPanel({
 
   function save() {
     setError(null);
+    const draft = kind === "flight" ? flight : stay;
+    const price = readPrice(draft.price);
+    if (price === "invalid") {
+      setError("Enter the price in pounds, or leave it blank.");
+      return;
+    }
     if (kind === "flight") {
       if (!flight.fromAirport.trim() && !flight.toAirport.trim() && !flight.bookingRef.trim()) {
         setError("Add the airports, the airport time, or the booking.");
         return;
       }
-      const row: FlightBooking = { id: newId(), kind: "flight", ...flight, bookingUrl: flight.bookingUrl || link };
+      const row: FlightBooking = {
+        id: newId(),
+        kind: "flight",
+        fromAirport: flight.fromAirport,
+        toAirport: flight.toAirport,
+        date: flight.date,
+        departTime: flight.departTime,
+        arriveTime: flight.arriveTime,
+        checkInDetails: flight.checkInDetails,
+        bookingRef: flight.bookingRef,
+        bookingUrl: flight.bookingUrl || link,
+        price,
+        receiptUrl: flight.receiptUrl,
+      };
       onChange({ ...log, bookings: [row, ...log.bookings] });
       setFlight(EMPTY_FLIGHT);
       setLink("");
@@ -160,7 +221,19 @@ export function BookingsPanel({
       setError("Add the hotel or the booking.");
       return;
     }
-    const row: StayBooking = { id: newId(), kind: "stay", ...stay, bookingUrl: stay.bookingUrl || link };
+    const row: StayBooking = {
+      id: newId(),
+      kind: "stay",
+      hotelName: stay.hotelName,
+      checkInDate: stay.checkInDate,
+      checkOutDate: stay.checkOutDate,
+      checkInTime: stay.checkInTime,
+      checkInDetails: stay.checkInDetails,
+      bookingRef: stay.bookingRef,
+      bookingUrl: stay.bookingUrl || link,
+      price,
+      receiptUrl: stay.receiptUrl,
+    };
     onChange({ ...log, bookings: [row, ...log.bookings] });
     setStay(EMPTY_STAY);
     setLink("");
@@ -220,6 +293,7 @@ export function BookingsPanel({
             <Field label="Arrives" value={flight.arriveTime} onChange={(value) => setFlight({ ...flight, arriveTime: value })} type="time" />
             <Field label="Check-in details" value={flight.checkInDetails} onChange={(value) => setFlight({ ...flight, checkInDetails: value })} placeholder="Terminal, desk, online" />
             <Field label="Booking" value={flight.bookingRef} onChange={(value) => setFlight({ ...flight, bookingRef: value })} placeholder="Reference" />
+            <Field label="Price (GBP)" value={flight.price} onChange={(value) => setFlight({ ...flight, price: value })} placeholder="" inputMode="decimal" />
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -229,8 +303,10 @@ export function BookingsPanel({
             <Field label="Check-in time" value={stay.checkInTime} onChange={(value) => setStay({ ...stay, checkInTime: value })} type="time" />
             <Field label="Check-in details" value={stay.checkInDetails} onChange={(value) => setStay({ ...stay, checkInDetails: value })} placeholder="Name, room, desk" />
             <Field label="Booking" value={stay.bookingRef} onChange={(value) => setStay({ ...stay, bookingRef: value })} placeholder="Reference" />
+            <Field label="Price (GBP)" value={stay.price} onChange={(value) => setStay({ ...stay, price: value })} placeholder="" inputMode="decimal" />
           </div>
         )}
+        <ReceiptLine url={kind === "flight" ? flight.receiptUrl : stay.receiptUrl} />
         <button
           type="button"
           onClick={save}
@@ -252,13 +328,18 @@ export function BookingsPanel({
                   </p>
                   <p className="truncate text-xs text-stone-500">
                     {booking.kind === "flight"
-                      ? [booking.date, booking.departTime && `${booking.departTime} airport time`, booking.checkInDetails, booking.bookingRef]
+                      ? [booking.date, booking.departTime && `${booking.departTime} airport time`, booking.checkInDetails, booking.bookingRef, booking.price != null ? formatMoney(booking.price, "GBP") : ""]
                           .filter(Boolean)
                           .join(" · ")
-                      : [booking.checkInDate, booking.checkOutDate && `to ${booking.checkOutDate}`, booking.checkInTime && `check-in ${booking.checkInTime}`, booking.checkInDetails, booking.bookingRef]
+                      : [booking.checkInDate, booking.checkOutDate && `to ${booking.checkOutDate}`, booking.checkInTime && `check-in ${booking.checkInTime}`, booking.checkInDetails, booking.bookingRef, booking.price != null ? formatMoney(booking.price, "GBP") : ""]
                           .filter(Boolean)
                           .join(" · ")}
                   </p>
+                  {booking.receiptUrl ? (
+                    <a href={booking.receiptUrl} target="_blank" rel="noreferrer" className="text-xs text-stone-600 underline-offset-2 hover:underline">
+                      Receipt
+                    </a>
+                  ) : null}
                 </div>
                 <button
                   type="button"
@@ -311,7 +392,7 @@ export function SpendPanel({
     <section className="rounded-3xl border border-stone-200 bg-white shadow-[0_18px_40px_-28px_rgba(28,25,23,0.45)]">
       <div className="flex items-end justify-between gap-3 border-b border-stone-100 px-4 py-3">
         <div>
-          <h2 className="text-sm font-medium uppercase tracking-[0.16em] text-stone-500">Trip spend</h2>
+          <h2 className="text-sm font-medium uppercase tracking-[0.16em] text-stone-500">General</h2>
           <p className="mt-1 font-serif text-3xl tracking-tight text-stone-950" aria-live="polite">
             {formatMoney(total, log.currency)}
           </p>
@@ -359,7 +440,7 @@ export function SpendPanel({
         </p>
         <ul className="space-y-2">
           {log.expenses.length === 0 ? (
-            <li className="text-sm text-stone-500">No costs yet. The running total stays at zero until you add one.</li>
+            <li className="text-sm text-stone-500">No general costs yet. Food, transport, leisure, and other stay at zero until you add one.</li>
           ) : (
             log.expenses.map((expense) => (
               <li key={expense.id} className="flex items-start justify-between gap-3 rounded-2xl border border-stone-200 px-3 py-2">
@@ -382,6 +463,18 @@ export function SpendPanel({
         </ul>
       </div>
     </section>
+  );
+}
+
+function ReceiptLine({ url }: { url: string }) {
+  if (!url) return null;
+  return (
+    <p className="text-xs text-stone-500">
+      Receipt stored.{" "}
+      <a href={url} target="_blank" rel="noreferrer" className="underline underline-offset-2">
+        Open image
+      </a>
+    </p>
   );
 }
 

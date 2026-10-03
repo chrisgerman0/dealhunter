@@ -21,7 +21,15 @@ import {
   progressFor,
   tripWindow,
 } from "@/data/sea-trip";
-import { EMPTY_SEA_LOG, expenseTotal, formatMoney, readSeaLog, writeSeaLog, type SeaLog } from "@/lib/sea/log";
+import {
+  EMPTY_SEA_LOG,
+  formatMoney,
+  readSeaLog,
+  spendBreakdown,
+  writeSeaLog,
+  type SeaLog,
+  type SpendBreakdown,
+} from "@/lib/sea/log";
 import { BookingsPanel, SpendPanel } from "@/components/sea/sea-log";
 
 export function SeaDashboard({ today }: { today: string }) {
@@ -44,7 +52,7 @@ export function SeaDashboard({ today }: { today: string }) {
   const active = PHASES.find((phase) => phase.id === activeId) ?? null;
   const number = dayNumber(clock);
   const until = daysBetween(clock, TRIP_START);
-  const total = expenseTotal(log.expenses);
+  const spend = spendBreakdown(log);
 
   return (
     <div className="min-h-screen bg-[#f6f4ef] text-stone-950">
@@ -57,20 +65,21 @@ export function SeaDashboard({ today }: { today: string }) {
       <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-8 px-4 py-8 sm:px-6 lg:py-10">
         <header>
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Private itinerary</p>
-          <div className="mt-1 flex flex-wrap items-end justify-between gap-4">
-            <div>
+          <div className="mt-3 flex flex-wrap items-start justify-between gap-6">
+            <div className="min-w-0 max-w-3xl">
               <h1 className="font-serif text-4xl tracking-tight text-stone-950 sm:text-5xl">{TRIP_TITLE}</h1>
-              <p className="mt-2 max-w-3xl text-sm text-stone-600 sm:text-base">
+              <p className="mt-2 text-sm text-stone-600 sm:text-base">
                 Departs Manchester for Dubai on {formatLongDate(TRIP_START)}, then Thailand, Vietnam, Kuala Lumpur, and
                 Bali through {formatLongDate(TRIP_END)}.
               </p>
             </div>
+            <SpendBreakdownCard spend={spend} />
           </div>
           <dl className="mt-4 flex flex-wrap gap-x-8 gap-y-2">
             <Stat label="Span" value={`${TRIP_SPAN_DAYS} days`} />
             <Stat label="Chapters" value={String(PHASES.length)} />
             <Stat label="Countries" value={String(COUNTRY_COUNT)} />
-            <Stat label="Spend" value={formatMoney(total, log.currency)} />
+            <Stat label="Spend" value={formatMoney(spend.total, "GBP")} />
           </dl>
           <p className="mt-3 text-sm text-stone-500">{PHASES.map((phase) => phase.city).join(" · ")}</p>
         </header>
@@ -102,6 +111,36 @@ function SeaMark() {
       <path d="M7 19.5c3.2-5 6.6-7.5 9-7.5s5.8 2.5 9 7.5" fill="none" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
       <circle cx="16" cy="11.2" r="1.7" fill="white" />
     </svg>
+  );
+}
+
+function SpendBreakdownCard({ spend }: { spend: SpendBreakdown }) {
+  const lines = [
+    { label: "Flights", amount: spend.flights },
+    { label: "Stays", amount: spend.stays },
+    { label: "General", amount: spend.general },
+  ];
+  return (
+    <section
+      aria-labelledby="sea-spend-heading"
+      className="w-full max-w-sm rounded-3xl border border-stone-200 bg-white px-5 py-4 shadow-[0_18px_40px_-28px_rgba(28,25,23,0.45)] sm:w-80"
+    >
+      <h2 id="sea-spend-heading" className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
+        Spend
+      </h2>
+      <dl className="mt-2">
+        {lines.map((line) => (
+          <div key={line.label} className="flex items-baseline justify-between gap-6 py-1">
+            <dt className="text-sm text-stone-600">{line.label}</dt>
+            <dd className="font-serif text-xl tracking-tight text-stone-950">{formatMoney(line.amount, "GBP")}</dd>
+          </div>
+        ))}
+        <div className="mt-1 flex items-baseline justify-between gap-6 border-t border-stone-200 pt-2">
+          <dt className="text-sm font-medium text-stone-950">Total</dt>
+          <dd className="font-serif text-2xl tracking-tight text-stone-950">{formatMoney(spend.total, "GBP")}</dd>
+        </div>
+      </dl>
+    </section>
   );
 }
 
