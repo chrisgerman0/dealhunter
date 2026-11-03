@@ -1,22 +1,15 @@
 import type { Metadata } from "next";
-import { R2RComingNext } from "@/components/r2r/coming-next";
+import { R2RSettingsForm } from "@/components/r2r/r2r-settings-form";
 
 export const metadata: Metadata = {
   title: "R2R Settings · Deal Hunter",
-  description: "Florida rent-to-rent defaults — in build.",
+  description: "Florida rent-to-rent capital, targets and modelling assumptions.",
 };
 
 export default function R2RSettingsPage() {
   return (
-    <R2RComingNext
-      title="R2R settings"
-      summary="Capital and search defaults for the R2R experience. These are stored separately from BMV settings — changing one never touches the other."
-      willInclude={[
-        "Available capital for deposits, furnishing and float, in USD",
-        "Default Florida markets and monthly rent band",
-        "Deal assumptions — occupancy, management share, utilities and turnover costs",
-        "Apply-defaults-to-filters, matching the BMV settings page",
-      ]}
-    />
+    <div className="px-4 py-6">
+      <R2RSettingsForm />
+    </div>
   );
 }
