@@ -35,17 +35,12 @@ export function ModeSwitcher({ mode }: { mode: AppMode }) {
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={`Mode: ${active.label}. Change mode`}
-        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-left text-sm font-medium transition-colors hover:bg-muted/60 data-popup-open:bg-muted"
+        className="ml-1 inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-left text-sm font-medium transition-colors hover:bg-muted/60 data-popup-open:bg-muted"
       >
-        <span className="flex flex-col leading-tight">
-          <span className="whitespace-nowrap">{active.label}</span>
-          <span className="hidden whitespace-nowrap text-[11px] font-normal text-muted-foreground sm:inline">
-            {active.subBrand}
-          </span>
-        </span>
+        <span className="whitespace-nowrap">{active.label}</span>
         <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-72 p-1.5">
+      <DropdownMenuContent align="end" className="w-72 p-1.5">
         {APP_MODES.map((id) => {
           const meta = MODE_META[id];
           const isActive = id === mode;

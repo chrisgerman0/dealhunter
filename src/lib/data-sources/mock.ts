@@ -62,6 +62,7 @@ export class MockPropertyDataSource implements PropertyDataSource {
       const q = params.query.toLowerCase();
       deals = deals.filter(
         (d) =>
+          d.city.toLowerCase().includes(q) ||
           d.address.toLowerCase().includes(q) ||
           d.postcode.toLowerCase().includes(q) ||
           d.area.toLowerCase().includes(q)

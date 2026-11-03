@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 import { useDealStore } from "@/store/useDealStore";
 import { formatGBP } from "@/lib/format";
-import type { City, DealQuality } from "@/types/deal";
+import type { DealQuality } from "@/types/deal";
 
 const AREAS = {
   liverpool: ["L4", "L5", "L6", "L7", "L8", "L15"],
@@ -22,13 +22,6 @@ export function FilterPanel() {
   const setFilters = useDealStore((s) => s.setFilters);
   const resetFilters = useDealStore((s) => s.resetFilters);
   const capital = useDealStore((s) => s.settings.capital);
-
-  const toggleCity = (city: City) => {
-    const cities = filters.cities.includes(city)
-      ? filters.cities.filter((c) => c !== city)
-      : [...filters.cities, city];
-    setFilters({ cities });
-  };
 
   const toggleArea = (area: string) => {
     const areas = filters.areas.includes(area)
@@ -58,25 +51,10 @@ export function FilterPanel() {
         <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           className="pl-8"
-          placeholder="Search address or postcode…"
+          placeholder="Search city, address or postcode…"
           value={filters.query}
           onChange={(e) => setFilters({ query: e.target.value })}
         />
-      </div>
-
-      <div className="space-y-2">
-        <Label className="text-xs uppercase tracking-wide text-muted-foreground">Cities</Label>
-        <div className="flex flex-col gap-2">
-          {(["liverpool", "manchester"] as City[]).map((city) => (
-            <label key={city} className="flex items-center gap-2 text-sm capitalize">
-              <Checkbox
-                checked={filters.cities.includes(city)}
-                onCheckedChange={() => toggleCity(city)}
-              />
-              {city}
-            </label>
-          ))}
-        </div>
       </div>
 
       <div className="space-y-2">

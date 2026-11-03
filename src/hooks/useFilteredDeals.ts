@@ -26,9 +26,10 @@ export function useFilteredDeals(): Deal[] {
       return entry.until < now;
     });
 
-    if (filters.cities.length) {
-      deals = deals.filter((d) => filters.cities.includes(d.city));
-    }
+    // City is a search term, not a checkbox — see the `filters.query` match
+    // below. `filters.cities` is kept on the store for persisted state but is
+    // deliberately not applied, or a stale saved value would silently hide
+    // deals with no visible control to clear it.
     if (filters.areas.length) {
       deals = deals.filter((d) => filters.areas.includes(d.area));
     }
@@ -49,6 +50,7 @@ export function useFilteredDeals(): Deal[] {
       const q = filters.query.toLowerCase();
       deals = deals.filter(
         (d) =>
+          d.city.toLowerCase().includes(q) ||
           d.address.toLowerCase().includes(q) ||
           d.postcode.toLowerCase().includes(q) ||
           d.area.toLowerCase().includes(q)

@@ -39,19 +39,16 @@ export function Header() {
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="mx-auto flex h-14 max-w-[1600px] items-center justify-between gap-2 overflow-x-auto overflow-y-hidden px-4 sm:gap-4">
-        <div className="flex shrink-0 items-center gap-2">
-          <Link
-            href={explorePath}
-            aria-label={`Deal Hunter — ${MODE_META[mode].label}`}
-            className="flex shrink-0 items-center gap-2 font-semibold tracking-tight"
-          >
-            <span className="flex size-8 items-center justify-center rounded-lg bg-emerald-600 text-white">
-              <Building2 className="size-4" />
-            </span>
-            <span className="hidden md:inline">Deal Hunter</span>
-          </Link>
-          <ModeSwitcher mode={mode} />
-        </div>
+        <Link
+          href={explorePath}
+          aria-label={`Deal Hunter — ${MODE_META[mode].label}`}
+          className="flex shrink-0 items-center gap-2 font-semibold tracking-tight"
+        >
+          <span className="flex size-8 items-center justify-center rounded-lg bg-emerald-600 text-white">
+            <Building2 className="size-4" />
+          </span>
+          <span className="hidden md:inline">Deal Hunter</span>
+        </Link>
         <nav className="flex items-center gap-1">
           {sections.map(({ section, label, icon: Icon }) => {
             const href = modePath(mode, section);
@@ -78,6 +75,7 @@ export function Header() {
               </Link>
             );
           })}
+          <ModeSwitcher mode={mode} />
         </nav>
       </div>
     </header>

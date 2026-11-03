@@ -170,7 +170,7 @@ function applyListingFilters(listings: Listing[], params: SearchParams): Listing
     if (params.maxSqft != null && d.sqft > params.maxSqft) return false;
     if (params.query?.trim()) {
       const q = params.query.toLowerCase();
-      const hay = `${d.address} ${d.postcode} ${d.propertyType ?? ""}`.toLowerCase();
+      const hay = `${d.city} ${d.address} ${d.postcode} ${d.propertyType ?? ""}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
