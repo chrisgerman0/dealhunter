@@ -117,17 +117,54 @@ Keep batch jobs off these endpoints; deal-detail traffic is the intended use.
 
 Suggested next extraction: move `buildScenario` from the mock generator into `src/lib/finance.ts` so live and mock paths share one calculator. Settings (bridge months, rate, LTV, contingency) should feed that calculator once live.
 
+## Modes
+
+Two experiences share one app shell:
+
+| Mode | Label | Routes | Status |
+|------|-------|--------|--------|
+| `bmv` | BMV Deals | `/`, `/deals/[id]`, `/shortlist`, `/settings` | Live |
+| `r2r` | R2R Deals | `/r2r`, `/r2r/deals/[id]`, `/r2r/shortlist`, `/r2r/settings` | Scaffold only |
+
+Both live in the `(hunter)` route group, so the header (and its mode switcher)
+is one layout instance that survives navigation between modes. Mode metadata —
+labels, sub-brand lines, path prefixes — is in `src/lib/modes.ts`, deliberately
+free of zustand so server components can read it.
+
+**The URL is the source of truth for the active mode.** `modeFromPathname()`
+derives it, and the header reconciles the store to the route in an effect, so
+deep links and back/forward behave.
+
+R2R re-uses the BMV `AppSettings` / `Filters` shapes as placeholders. The
+Florida domain model and deal data land separately; no R2R data is mocked.
+
 ## Client state
 
-Zustand store (`dealhunter-store` in `localStorage`):
+Zustand store (`dealhunter-store` in `localStorage`), version 3 — **mode-keyed**:
 
-- shortlisted / dismissed / snoozed IDs
-- settings (capital, cities, freehold, price band, finance defaults)
-- Explore filters (derived defaults from settings)
-- selected map pin / compare IDs
+```
+{ mode: "bmv" | "r2r",
+  modes: { bmv: ModeState, r2r: ModeState } }
+```
+
+`ModeState` holds shortlisted / dismissed / snoozed IDs, settings (capital,
+cities, freehold, price band, finance defaults), Explore filters and compare
+IDs. BMV and R2R share none of it.
+
+The active mode's slice is lifted into the top-level store fields so existing
+components read `s.shortlisted` unchanged; `partialize` folds it back into
+`modes[mode]` on every write, so there is exactly one source of truth on disk.
+`selectedDealId` is ephemeral and never persisted.
+
+Hydration is defensive — `normalizePersisted()` coerces anything in
+`localStorage` (the old flat v1/v2 shape, a half-written object, junk) into a
+valid state, and runs from `merge` so it applies even when `migrate` is
+skipped. v2 → v3 carries the old flat slice over as BMV.
 
 No auth — personal-use prototype.
 
 ## Maps
 
 `DealMap` / `MiniMap` use MapLibre GL with **Esri World Street Map** raster tiles — no API key. `MapFallback` is only used if the basemap fails to load. Do not revert to Mapbox or CARTO.
+
+The Vercel project still carries a `NEXT_PUBLIC_MAPBOX_TOKEN` env var in Production and Preview. **No code reads it** — the string appears nowhere in `src/`, and the only `@mapbox/*` packages present are transitive dependencies of `maplibre-gl`. It is a leftover from before the Esri switch.

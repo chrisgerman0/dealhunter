@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { Plane } from "lucide-react";
 import { useDealStore } from "@/store/useDealStore";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -159,6 +161,24 @@ export function SettingsForm() {
           Saved automatically
         </Button>
       </div>
+
+      {/* Low-prominence home for things that are not deal hunting. The SEA
+          trip board used to sit in the header nav; only its entry point moved. */}
+      <section className="space-y-3 rounded-xl border border-dashed p-4">
+        <div>
+          <h2 className="text-sm font-medium text-muted-foreground">Other tools</h2>
+          <p className="text-xs text-muted-foreground">
+            Not part of deal hunting — parked here to keep the nav clean.
+          </p>
+        </div>
+        <Link
+          href="/sea"
+          className="inline-flex items-center gap-2 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+        >
+          <Plane className="size-4" />
+          SEA (South East Asia) trip board
+        </Link>
+      </section>
     </div>
   );
 }
