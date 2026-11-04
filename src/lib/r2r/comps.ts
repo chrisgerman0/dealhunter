@@ -4,48 +4,26 @@
  * ═══════════════════════════════════════════════════════════════════════
  *
  * Every nightly rate in the R2R model enters through one interface,
- * `StrCompSource`, and exactly one line decides which implementation is live:
- *
- *     export const ACTIVE_COMP_SOURCE = MOCK_COMP_SOURCE;
- *
- * Change that to `COMPETITOR_PRICING_SOURCE` and the whole experience reads
- * Chris's own scraper instead of the mock catalogue. Nothing else moves — not
- * the assembler, not the finance maths, not the verdict bands, not the UI.
+ * `StrCompSource`. `ACTIVE_COMP_SOURCE` at the bottom of this file decides
+ * which implementation is live.
  *
  * NO PAID VENDORS. Chris's ruling, 2026-11-03: "You are my price labs."
- * AirDNA / PriceLabs / RentCast are not options here and no code path reaches
- * for one. The comp engine is
- * `/root/.openclaw/workspace/nfstay-hq/scripts/competitor-pricing.js`, which
- * already computes min / max / median / avg / p25 / p75 nightly rates from live
- * Airbnb search pages.
+ * AirDNA / PriceLabs / RentCast are not options for comps and no code path
+ * here reaches for one.
  *
- * THE SCRAPER IS NOT MODIFIED. It stays Chris's tool, on its own cron, writing
- * its own file. This module adapts its output shape to ours — the dependency
- * points one way only.
+ * Chris already owns a scraper for this idea —
+ * `nfstay-hq/scripts/competitor-pricing.js` — but it is Liverpool/Manchester,
+ * sterling, on its own cron, and the hard rule for this build is "do not
+ * touch nfstay-hq." So this file does not read its output file or depend on
+ * its cron. Instead `src/lib/r2r/airbnb-live.ts` is Deal Hunter's own,
+ * Florida-native, USD implementation of the same idea: same embedded-JSON
+ * extraction technique, same live Airbnb search pages, verified working
+ * end-to-end on 2026-11-04 (see that file's header for what was proven).
  *
- * WHAT THE SCRAPER GIVES US, AND WHAT IT DOES NOT
- * -----------------------------------------------
- * Gives us (verified against `live-data/competitor-pricing.json`, 8 scans):
- *   · `pricePerNight.{min,max,median,avg,p25,p75}` — a real nightly-rate
- *     distribution, already de-duplicated and floor-guarded
- *   · `totalListings` — the sample size behind that distribution
- *   · `location` + `roomType` + a check-in/check-out window
- *
- * Does NOT give us:
- *   · per-listing rows, so there are no individual comps to table
- *   · coordinates, so a 250 m / 500 m / 1 km radius cannot be computed from it
- *   · occupancy, which Airbnb search pages do not expose at all
- *
- * That gap is reported, never papered over. An aggregate comp set comes back
- * flagged `aggregateOnly`, which makes the engine treat it as a thin sample and
- * fall back to the configured occupancy assumption — the behaviour that already
- * exists for sparse mock comps. The UI prints the real geo match it got.
- *
- * TO MAKE THE RADIUS REAL, the scraper needs per-listing coordinates. That is a
- * change to Chris's scraper, so it is his call, not a silent patch from here:
- * `SEARCHES` would gain a Florida entry and `fetchAirbnbPrices` would need to
- * keep each listing's `lat`/`lng` alongside its price. Until then, the honest
- * statement is "area-level aggregate", and that is what this module says.
+ * It goes further than the aggregate-only design this file used to have:
+ * live testing showed the search page still carries each listing's lat/lng,
+ * so comps here are real per-listing rows with a real geo radius — not an
+ * area-level distribution standing in for one.
  */
 import type {
   FloridaMarket,
@@ -55,6 +33,7 @@ import type {
   StrCompRequest,
 } from "@/types/r2r";
 import { GEO_MATCH_METERS } from "./thresholds";
+import { fetchMarketAirbnbScan, haversineMeters, type LiveAirbnbListing } from "./airbnb-live";
 
 /* ------------------------------------------------------------------ *
  * The interface
@@ -105,8 +84,28 @@ export interface StrCompSource {
   fetchComps(request: StrCompRequest & { market: FloridaMarket }): Promise<StrCompSet>;
 }
 
+const GEO_MATCH_LABEL: Record<GeoMatch, string> = {
+  same_street: "same-street",
+  radius_250m: "250 m",
+  radius_500m: "500 m",
+  radius_1km: "1 km",
+};
+
+function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
+function quantile(values: number[], q: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * q))];
+}
+
 /* ------------------------------------------------------------------ *
- * Source 1 — the mock catalogue (live in this build)
+ * Source 1 — the mock catalogue (fallback when the live scrape fails)
  * ------------------------------------------------------------------ */
 
 /**
@@ -148,201 +147,122 @@ export const MOCK_COMP_SOURCE: StrCompSource = {
 };
 
 /* ------------------------------------------------------------------ *
- * Source 2 — Chris's competitor-pricing scraper
+ * Source 2 — Deal Hunter's own live Airbnb scrape
  * ------------------------------------------------------------------ */
 
-/** One scan row as `competitor-pricing.js` writes it. Do not widen loosely. */
-export interface CompetitorPricingScan {
-  location: string;
-  roomType: string;
-  dateRange: string;
-  checkin: string;
-  checkout: string;
-  eventType: "baseline" | "event" | string;
-  totalListings: number;
-  extraction: string;
-  pricePerNight: {
-    min: number;
-    max: number;
-    median: number;
-    avg: number;
-    p25: number;
-    p75: number;
-  };
-  samplePrices?: number[];
-}
-
-export interface CompetitorPricingFile {
-  lastUpdated: string;
-  scans: CompetitorPricingScan[];
-}
-
-/**
- * Market → the `location` name to look for in the scraper's `SEARCHES`.
- *
- * Adding a Florida market end-to-end is two edits, neither of which is in this
- * file's maths: add the search to the scraper's `SEARCHES` array, then add its
- * name here. The slug beside each name is the Airbnb location slug the
- * scraper's `query` field wants.
- */
-export const MARKET_SCAN_NAMES: Record<FloridaMarket, { name: string; airbnbSlug: string }> = {
-  kissimmee: { name: "Kissimmee", airbnbSlug: "Kissimmee--FL--United-States" },
-  tampa: { name: "Tampa", airbnbSlug: "Tampa--FL--United-States" },
-  broward: { name: "Fort Lauderdale", airbnbSlug: "Fort-Lauderdale--FL--United-States" },
-  "clearwater-stpete": { name: "Clearwater", airbnbSlug: "Clearwater--FL--United-States" },
-  destin: { name: "Destin", airbnbSlug: "Destin--FL--United-States" },
-  "panama-city-beach": {
-    name: "Panama City Beach",
-    airbnbSlug: "Panama-City-Beach--FL--United-States",
-  },
-  "miami-beach": { name: "Miami Beach", airbnbSlug: "Miami-Beach--FL--United-States" },
-  "orlando-city": { name: "Orlando", airbnbSlug: "Orlando--FL--United-States" },
-  "key-west": { name: "Key West", airbnbSlug: "Key-West--FL--United-States" },
-  naples: { name: "Naples", airbnbSlug: "Naples--FL--United-States" },
-};
-
-export interface CompetitorPricingAdapterOptions {
-  /**
-   * Multiplier onto the scraper's figures.
-   *
-   * The scraper currently queries `airbnb.co.uk` and reads `£` amounts, so a
-   * Liverpool scan is sterling and needs a real rate. A Florida scan placed on
-   * `airbnb.com` returns dollars and wants `1`. There is no default guess and
-   * no silent conversion: whoever wires the source states the rate.
-   */
-  fxToUsd: number;
-  /** Only `Entire home/apt` scans are comparable to a whole-unit arbitrage let. */
-  roomType?: string;
-}
-
-/**
- * Scraper distribution → seasonal nightly rates.
- *
- * The scraper samples specific date windows, not seasons, so the seasonal
- * spread is taken from the price distribution instead: the top quartile of
- * live asks is what a well-run listing holds in peak, the median is shoulder,
- * the bottom quartile is off-season. That is an assumption, stated here and
- * printed in the UI — not a measurement.
- */
-export function seasonalRatesFromScan(
-  scan: CompetitorPricingScan,
-  fxToUsd: number
-): Record<Season, number> {
-  const fx = (v: number) => Math.round(v * fxToUsd);
+function toStrComp(listing: LiveAirbnbListing, distanceMeters: number, beds: number): StrComp {
   return {
-    peak: fx(scan.pricePerNight.p75),
-    shoulder: fx(scan.pricePerNight.median),
-    off: fx(scan.pricePerNight.p25),
+    title: listing.title,
+    // Not measured per listing — see airbnb-live.ts header. Stated as the
+    // subject's own bed count, never presented as something read off the page.
+    unitType: "single_family",
+    beds,
+    sleeps: beds * 2,
+    nightlyPeak: listing.nightlyUsd,
+    nightlyShoulder: listing.nightlyUsd,
+    nightlyOff: listing.nightlyUsd,
+    occupancy: 0,
+    reviewScore: listing.reviewScore,
+    reviewCount: listing.reviewCount,
+    distanceMeters: Math.round(distanceMeters),
+    sameStreet: distanceMeters <= GEO_MATCH_METERS.same_street,
+    listingUrl: undefined,
   };
 }
 
 /**
- * Pure adapter: the scraper's file plus a request → one comp set.
- *
- * Exported separately from the source so it can be exercised without a network
- * call or a filesystem. Returns `null` when the scraper has no scan for the
- * market, which is a real answer — the caller must not substitute a guess.
+ * Pure adapter: a market's live listing pool, a request → one comp set.
+ * Exported separately so it can be exercised without a network call.
  */
-export function compSetFromCompetitorPricing(
-  file: CompetitorPricingFile,
-  request: StrCompRequest & { market: FloridaMarket },
-  options: CompetitorPricingAdapterOptions
-): StrCompSet | null {
-  const target = MARKET_SCAN_NAMES[request.market];
-  if (!target) return null;
+export function compSetFromLiveListings(
+  scan: { listings: LiveAirbnbListing[]; fetchedAt: string },
+  request: StrCompRequest & { market: FloridaMarket }
+): StrCompSet {
+  const withDistance = scan.listings.map((l) => ({
+    listing: l,
+    distanceMeters: haversineMeters(request.coords, { lat: l.lat, lng: l.lng }),
+  }));
 
-  const wantedRoomType = options.roomType ?? "Entire home/apt";
-  const matches = file.scans.filter(
-    (s) =>
-      s.location.toLowerCase().includes(target.name.toLowerCase()) &&
-      s.roomType === wantedRoomType
-  );
-  if (matches.length === 0) return null;
+  // "same_street" cannot be honoured — Airbnb's public search page carries no
+  // street address, only an approximate (privacy-jittered) point. Report the
+  // tightest band we can actually measure instead of pretending to match it.
+  const requestedMatch: GeoMatch = request.geoMatch === "same_street" ? "radius_250m" : request.geoMatch;
+  const bandsInOrder: GeoMatch[] = ["radius_250m", "radius_500m", "radius_1km"];
+  const startIdx = Math.max(0, bandsInOrder.indexOf(requestedMatch));
 
-  // Baseline windows describe normal trading. Event windows are a spike and
-  // would overstate every month of the year if blended in.
-  const baselines = matches.filter((s) => s.eventType === "baseline");
-  const used = baselines.length > 0 ? baselines : matches;
+  let achieved: GeoMatch = bandsInOrder[startIdx] ?? "radius_1km";
+  let inRadius = withDistance.filter((d) => d.distanceMeters <= GEO_MATCH_METERS[achieved]);
 
-  // Widest distribution across the baseline windows, weighted by listing count.
-  const totalListings = used.reduce((sum, s) => sum + s.totalListings, 0);
-  const weighted = (pick: (s: CompetitorPricingScan) => number) =>
-    totalListings > 0
-      ? used.reduce((sum, s) => sum + pick(s) * s.totalListings, 0) / totalListings
-      : 0;
+  // Widen if the requested band came back empty — a real but honestly-reported
+  // compromise, same principle as the old aggregate-only fallback.
+  for (let i = startIdx + 1; inRadius.length === 0 && i < bandsInOrder.length; i++) {
+    achieved = bandsInOrder[i];
+    inRadius = withDistance.filter((d) => d.distanceMeters <= GEO_MATCH_METERS[achieved]);
+  }
 
-  const blended: CompetitorPricingScan = {
-    ...used[0],
-    totalListings,
-    pricePerNight: {
-      min: Math.round(Math.min(...used.map((s) => s.pricePerNight.min))),
-      max: Math.round(Math.max(...used.map((s) => s.pricePerNight.max))),
-      median: Math.round(weighted((s) => s.pricePerNight.median)),
-      avg: Math.round(weighted((s) => s.pricePerNight.avg)),
-      p25: Math.round(weighted((s) => s.pricePerNight.p25)),
-      p75: Math.round(weighted((s) => s.pricePerNight.p75)),
-    },
-  };
+  const prices = inRadius.map((d) => d.listing.nightlyUsd);
+  const medianNightly: Record<Season, number> =
+    prices.length > 0
+      ? {
+          peak: Math.round(quantile(prices, 0.75)),
+          shoulder: Math.round(median(prices)),
+          off: Math.round(quantile(prices, 0.25)),
+        }
+      : { peak: 0, shoulder: 0, off: 0 };
 
-  const medianNightly = seasonalRatesFromScan(blended, options.fxToUsd);
+  const comps = inRadius
+    .map((d) => toStrComp(d.listing, d.distanceMeters, request.beds))
+    .sort((a, b) => a.distanceMeters - b.distanceMeters);
+
+  const requestedLabel = GEO_MATCH_LABEL[request.geoMatch];
+  const achievedLabel = GEO_MATCH_LABEL[achieved];
+  const matchNote =
+    request.geoMatch === "same_street"
+      ? `"same-street" was requested but Airbnb's public search page carries no street address, only an ` +
+        `approximate point — the tightest band actually measurable (${achievedLabel}) was used instead.`
+      : achieved !== requestedMatch
+        ? `${requestedLabel} was requested and came back empty, so the band was widened to ${achievedLabel}.`
+        : `${achievedLabel} match, as requested.`;
 
   return {
-    // The request asked for a radius; the source can only answer at area
-    // level. Report what was achieved, so no surface claims a 250 m match it
-    // did not make.
-    geoMatch: "radius_1km",
-    radiusMeters: GEO_MATCH_METERS.radius_1km,
-    comps: [],
-    aggregateOnly: true,
-    medianNightly,
-    sampleSize: blended.totalListings,
+    geoMatch: achieved,
+    radiusMeters: GEO_MATCH_METERS[achieved],
+    comps,
+    aggregateOnly: false,
+    medianNightly: prices.length > 0 ? medianNightly : null,
+    sampleSize: comps.length,
     annualOccupancy: null,
-    sourceId: "competitor-pricing",
+    sourceId: "airbnb-live",
     sourceNote:
-      `${blended.totalListings} live Airbnb asks across ${used.length} baseline window(s) for ` +
-      `${target.name} (${wantedRoomType}), via competitor-pricing.js. Area-level aggregate — ` +
-      `the ${GEO_MATCH_LABEL[request.geoMatch]} match was requested but the scraper does not ` +
-      `emit per-listing coordinates, so it could not be honoured. Seasonal spread is taken from ` +
-      `the p25/median/p75 of live asks, not from measured seasons. Occupancy is not measurable ` +
-      `from Airbnb search pages, so the configured assumption is used.`,
-    dataAsOf: file.lastUpdated,
+      `${comps.length} live Airbnb entire-home listings within ${matchNote} ` +
+      `Scraped from airbnb.com, ${scan.fetchedAt.slice(0, 10)}. Seasonal spread (peak/shoulder/off) is the ` +
+      `p75/median/p25 of the live price distribution, not measured seasons. Occupancy is not measurable from ` +
+      `Airbnb search pages, so the configured assumption is used. Comps are not filtered by bedroom count — ` +
+      `the search page does not expose it per listing.`,
+    dataAsOf: scan.fetchedAt,
   };
 }
 
-const GEO_MATCH_LABEL: Record<GeoMatch, string> = {
-  same_street: "same-street",
-  radius_250m: "250 m",
-  radius_500m: "500 m",
-  radius_1km: "1 km",
-};
-
 /**
- * The live-scraper source.
- *
- * Reads through `/api/r2r/comps`, which does the filesystem read server-side —
- * the scraper's JSON lives outside this app and a browser cannot open it.
+ * The live-scrape source. No API key, no vendor — reads airbnb.com directly.
+ * Can fail (network, rate limit, page-shape change); callers must catch and
+ * fall back rather than let a failed scrape take down deal assembly.
  */
-export const COMPETITOR_PRICING_SOURCE: StrCompSource = {
-  id: "competitor-pricing",
-  label: "competitor-pricing.js (Chris's scraper)",
+export const LIVE_AIRBNB_SOURCE: StrCompSource = {
+  id: "airbnb-live",
+  label: "Live Airbnb scrape (Deal Hunter's own)",
   description:
-    "Live Airbnb asks from nfstay-hq/scripts/competitor-pricing.js. Area-level aggregate: real " +
-    "nightly distribution, no per-listing coordinates, no occupancy.",
+    "Real-time Airbnb entire-home listings for the target market, scraped directly from airbnb.com. " +
+    "Per-listing coordinates give a real geo radius. No occupancy, no vendor, no key required.",
   capabilities: {
-    perListingRows: false,
-    geoRadius: false,
+    perListingRows: true,
+    geoRadius: true,
     occupancy: false,
     seasonalRates: false,
   },
   async fetchComps(request) {
-    const params = new URLSearchParams({
-      market: request.market,
-      geoMatch: request.geoMatch,
-      beds: String(request.beds),
-    });
-    const res = await fetch(`/api/r2r/comps?${params.toString()}`, { cache: "no-store" });
-    if (!res.ok) throw new Error(`Comp source returned ${res.status}`);
-    return (await res.json()) as StrCompSet;
+    const scan = await fetchMarketAirbnbScan(request.market);
+    return compSetFromLiveListings(scan, request);
   },
 };
 
@@ -351,16 +271,11 @@ export const COMPETITOR_PRICING_SOURCE: StrCompSource = {
  * ------------------------------------------------------------------ */
 
 /**
- * Swap `MOCK_COMP_SOURCE` for `COMPETITOR_PRICING_SOURCE` to go live.
- *
- * Still mock because the scraper has no Florida scans in it yet — its
- * `SEARCHES` array is Liverpool and Manchester, in sterling. Pointing this at
- * the scraper today would return `null` for every Florida market, which is
- * worse than a mock that is labelled as one.
+ * Live by default — scraping needs no key, so there is no "unkeyed" state to
+ * guard. `src/lib/r2r/live-deals.ts` still wraps every call in a try/catch and
+ * falls back to the mock catalogue per-market if a scrape fails, so a single
+ * blocked or malformed fetch degrades one market, never the whole app.
  */
-export const ACTIVE_COMP_SOURCE: StrCompSource = MOCK_COMP_SOURCE;
+export const ACTIVE_COMP_SOURCE: StrCompSource = LIVE_AIRBNB_SOURCE;
 
-export const ALL_COMP_SOURCES: StrCompSource[] = [
-  MOCK_COMP_SOURCE,
-  COMPETITOR_PRICING_SOURCE,
-];
+export const ALL_COMP_SOURCES: StrCompSource[] = [MOCK_COMP_SOURCE, LIVE_AIRBNB_SOURCE];
