@@ -38,6 +38,18 @@ export function cacheSet<T>(key: string, value: T, ttlMs: number): T {
   return value;
 }
 
+/**
+ * In-flight requests, keyed the same way as `store`.
+ *
+ * Without this, N concurrent callers for the same key all miss the cache and
+ * all call `fn()` — which for a scraper means N identical upstream requests
+ * for one piece of data. The R2R seeds route builds up to a dozen seeds per
+ * market concurrently and every one of them asks for that market's Airbnb
+ * comp scan, so the un-deduped version was a dozen scrapes of the same URL
+ * per market per cold request. Sharing the promise makes it one.
+ */
+const inFlight = new Map<string, Promise<unknown>>();
+
 export async function cached<T>(
   key: string,
   ttlMs: number,
@@ -45,8 +57,19 @@ export async function cached<T>(
 ): Promise<T> {
   const hit = cacheGet<T>(key);
   if (hit !== undefined) return hit;
-  const value = await fn();
-  return cacheSet(key, value, ttlMs);
+
+  const pending = inFlight.get(key) as Promise<T> | undefined;
+  if (pending) return pending;
+
+  // Failures must NOT be cached — only the in-flight entry is shared, and it
+  // is cleared on both settle paths so the next caller retries.
+  const promise = fn()
+    .then((value) => cacheSet(key, value, ttlMs))
+    .finally(() => {
+      inFlight.delete(key);
+    });
+  inFlight.set(key, promise);
+  return promise;
 }
 
 export function roundCoord(n: number, places = 4): number {
