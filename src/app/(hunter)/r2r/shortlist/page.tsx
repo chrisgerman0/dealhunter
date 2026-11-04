@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo } from "react";
-import { getAllR2RDeals } from "@/data/mock-r2r-properties";
-import { assumptionsFromSettings } from "@/lib/r2r/assemble";
+import { assembleR2RDeal, assumptionsFromSettings } from "@/lib/r2r/assemble";
 import { useDealStore } from "@/store/useDealStore";
+import { useR2RSeeds } from "@/hooks/useR2RSeeds";
 import { R2RComparisonTable } from "@/components/r2r/r2r-comparison-table";
 import { R2RDealCard } from "@/components/r2r/r2r-deal-card";
 
@@ -11,12 +11,15 @@ import { R2RDealCard } from "@/components/r2r/r2r-deal-card";
 export default function R2RShortlistPage() {
   const shortlisted = useDealStore((s) => s.shortlisted);
   const settings = useDealStore((s) => s.r2rSettings);
+  const { data, loading, error } = useR2RSeeds();
 
-  const deals = useMemo(
-    () =>
-      getAllR2RDeals(assumptionsFromSettings(settings)).filter((d) => shortlisted.includes(d.id)),
-    [settings, shortlisted]
-  );
+  const deals = useMemo(() => {
+    if (!data) return [];
+    const assumptions = assumptionsFromSettings(settings);
+    return data.seeds
+      .map((seed) => assembleR2RDeal(seed, assumptions))
+      .filter((d) => shortlisted.includes(d.id));
+  }, [data, settings, shortlisted]);
 
   return (
     <div className="space-y-6 px-4 py-6">
@@ -26,6 +29,13 @@ export default function R2RShortlistPage() {
           Compare all shortlisted R2R deals side-by-side. Persisted in your browser, separately
           from BMV.
         </p>
+        {loading && <p className="mt-1 text-xs text-muted-foreground">Loading live listings…</p>}
+        {error && <p className="mt-1 text-xs text-red-700">Live feed failed to load — {error}</p>}
+        {data && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            {data.source === "rentcast" ? "Live RentCast listings." : "Sample data — live feed not connected."}
+          </p>
+        )}
       </div>
 
       <R2RComparisonTable deals={deals} />

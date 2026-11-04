@@ -1,26 +1,41 @@
 "use client";
 
 import { useMemo } from "react";
-import { getAllR2RDeals } from "@/data/mock-r2r-properties";
-import { assumptionsFromSettings } from "@/lib/r2r/assemble";
+import { assembleR2RDeal, assumptionsFromSettings } from "@/lib/r2r/assemble";
 import { useDealStore } from "@/store/useDealStore";
+import { useR2RSeeds } from "./useR2RSeeds";
 import type { R2RDeal } from "@/types/r2r";
 
+export interface FilteredR2RDeals {
+  deals: R2RDeal[];
+  loading: boolean;
+  error: string | null;
+  /** `null` while loading. `"rentcast"` or `"mock"` once resolved — never ambiguous. */
+  source: "rentcast" | "mock" | null;
+  /** ISO timestamp the live data was fetched, or `null` for mock / not-yet-loaded. */
+  dataAsOf: string | null;
+  note: string;
+}
+
 /**
- * Structural copy of `src/hooks/useFilteredDeals.ts` for the Florida feed.
- *
- * Dismissed and snoozed are applied first, then the filter rail, then the sort,
- * in the same order and with the same semantics as BMV.
+ * Structural copy of `src/hooks/useFilteredDeals.ts` for the Florida feed,
+ * now fed by `/api/r2r/seeds` (live RentCast + live Airbnb comps, or the
+ * mock catalogue) instead of the mock file directly. Dismissed and snoozed
+ * are applied first, then the filter rail, then the sort — same order and
+ * semantics as BMV.
  */
-export function useFilteredR2RDeals(): R2RDeal[] {
+export function useFilteredR2RDeals(): FilteredR2RDeals {
   const filters = useDealStore((s) => s.r2rFilters);
   const settings = useDealStore((s) => s.r2rSettings);
   const dismissed = useDealStore((s) => s.dismissed);
   const snoozed = useDealStore((s) => s.snoozed);
+  const { data, loading, error } = useR2RSeeds();
 
-  return useMemo(() => {
+  const deals = useMemo(() => {
+    if (!data) return [];
     const now = Date.now();
-    let deals = getAllR2RDeals(assumptionsFromSettings(settings));
+    const assumptions = assumptionsFromSettings(settings);
+    let deals = data.seeds.map((seed) => assembleR2RDeal(seed, assumptions));
 
     deals = deals.filter((d) => !dismissed.includes(d.id));
     deals = deals.filter((d) => {
@@ -86,5 +101,14 @@ export function useFilteredR2RDeals(): R2RDeal[] {
     });
 
     return deals;
-  }, [filters, settings, dismissed, snoozed]);
+  }, [data, filters, settings, dismissed, snoozed]);
+
+  return {
+    deals,
+    loading,
+    error,
+    source: data?.source ?? null,
+    dataAsOf: data?.dataAsOf ?? null,
+    note: data?.note ?? "",
+  };
 }

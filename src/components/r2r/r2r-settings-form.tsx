@@ -10,8 +10,45 @@ import { formatUSD } from "@/lib/r2r/format";
 import { MARKET_PROFILES, WORKABLE_MARKETS } from "@/lib/r2r/markets";
 import { SEASONALITY_MODEL_LABELS } from "@/lib/r2r/seasonality";
 import { ACTIVE_COMP_SOURCE, ALL_COMP_SOURCES } from "@/lib/r2r/comps";
+import { useR2RSeeds } from "@/hooks/useR2RSeeds";
 import type { FloridaMarket } from "@/types/r2r";
 import { toast } from "sonner";
+
+/** Reads the same `/api/r2r/seeds` response Explore uses — never a second, divergent source of truth. */
+function RentalSourceStatus() {
+  const { data, loading, error } = useR2RSeeds();
+
+  if (loading) {
+    return <p className="text-xs text-muted-foreground">Checking…</p>;
+  }
+  if (error) {
+    return (
+      <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+        Failed to check: {error}
+      </p>
+    );
+  }
+  if (data?.source === "rentcast") {
+    return (
+      <div className="space-y-1 rounded-lg border border-emerald-300 bg-emerald-50/50 p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm font-medium">RentCast</p>
+          <Badge className="border-transparent bg-emerald-600 text-white">Live</Badge>
+        </div>
+        <p className="text-xs text-muted-foreground">{data.note}</p>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-1 rounded-lg border border-amber-300 bg-amber-50/50 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-sm font-medium">Mock catalogue</p>
+        <Badge variant="outline">Fallback</Badge>
+      </div>
+      <p className="text-xs text-muted-foreground">{data?.note ?? "RENTCAST_API_KEY not set."}</p>
+    </div>
+  );
+}
 
 /**
  * Structural copy of `src/components/settings/settings-form.tsx` — same
@@ -261,11 +298,30 @@ export function R2RSettingsForm() {
           })}
         </div>
         <p className="text-xs text-muted-foreground">
-          Swap the source on one line — <code className="font-mono">ACTIVE_COMP_SOURCE</code> in{" "}
-          <code className="font-mono">src/lib/r2r/comps.ts</code>. The live option reads Chris&apos;s
-          own scraper, <code className="font-mono">nfstay-hq/scripts/competitor-pricing.js</code>,
-          which already computes min / max / median / avg / p25 / p75 nightly rates. It is still on
-          mock because that scraper has no Florida searches in it yet.
+          The live scrape is Deal Hunter&apos;s own — <code className="font-mono">src/lib/r2r/airbnb-live.ts</code>{" "}
+          reads airbnb.com directly in USD, per market. It needs no key and never touches
+          Chris&apos;s own scraper (<code className="font-mono">nfstay-hq/scripts/competitor-pricing.js</code>,
+          Liverpool/Manchester, sterling, its own cron). If a scrape fails for a market, that
+          market&apos;s comps fall back to the configured occupancy assumption rather than taking
+          the page down.
+        </p>
+      </section>
+
+      <section className="space-y-3 rounded-xl border border-dashed p-4">
+        <div>
+          <h2 className="text-sm font-medium text-muted-foreground">Rental listings source</h2>
+          <p className="text-xs text-muted-foreground">
+            The units Deal Hunter can lease. This one needs a key — Realtor.com, Zillow and
+            Apartments.com all prohibit scraping in their ToS, so there is no free fallback for
+            this half of the data the way there is for comps.
+          </p>
+        </div>
+        <RentalSourceStatus />
+        <p className="text-xs text-muted-foreground">
+          Set <code className="font-mono">RENTCAST_API_KEY</code> (sign up at{" "}
+          <code className="font-mono">developers.rentcast.io</code> — free tier 50 calls/mo,
+          dev/test only; $74/mo for 1,000) to go live. One call per market per day, cached hard
+          against that ceiling — see <code className="font-mono">src/lib/r2r/rentcast.ts</code>.
         </p>
       </section>
 
