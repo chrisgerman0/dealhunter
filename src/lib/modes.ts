@@ -45,8 +45,15 @@ export function modeFromPathname(pathname: string): AppMode {
   return pathname === "/r2r" || pathname.startsWith("/r2r/") ? "r2r" : "bmv";
 }
 
+/**
+ * Routable sections. `mirror` is R2R-only — see `MODE_ONLY_SECTIONS` in
+ * `header.tsx`; `modePath` will happily build the BMV form of it, so the nav
+ * is what gates visibility, not this type.
+ */
+export type ModeSection = "" | "shortlist" | "settings" | "deals" | "mirror";
+
 /** Path for a section within a mode. `""` is that mode's explore page. */
-export function modePath(mode: AppMode, section: "" | "shortlist" | "settings" | "deals"): string {
+export function modePath(mode: AppMode, section: ModeSection): string {
   const base = MODE_META[mode].basePath;
   if (!section) return base || "/";
   return `${base}/${section}`;

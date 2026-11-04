@@ -3,18 +3,34 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, Heart, Settings, Compass } from "lucide-react";
+import { Building2, Heart, Settings, Compass, Database } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDealStore } from "@/store/useDealStore";
 import { Badge } from "@/components/ui/badge";
-import { MODE_META, modeFromPathname, modePath } from "@/lib/modes";
+import { MODE_META, modeFromPathname, modePath, type AppMode, type ModeSection } from "@/lib/modes";
 import { ModeSwitcher } from "@/components/layout/mode-switcher";
 
-const sections = [
+interface NavSection {
+  section: ModeSection;
+  label: string;
+  icon: typeof Compass;
+}
+
+const sections: NavSection[] = [
   { section: "" as const, label: "Explore", icon: Compass },
   { section: "shortlist" as const, label: "Shortlist", icon: Heart },
   { section: "settings" as const, label: "Settings", icon: Settings },
 ];
+
+/**
+ * Sections that only exist in one mode.
+ *
+ * The listing mirror scrapes Zillow/Realtor rentals, which is an R2R concept
+ * — BMV has no equivalent, so showing the tab there would link to a 404.
+ */
+const MODE_ONLY_SECTIONS: Partial<Record<AppMode, NavSection[]>> = {
+  r2r: [{ section: "mirror", label: "Mirror", icon: Database }],
+};
 
 export function Header() {
   const pathname = usePathname();
@@ -50,7 +66,7 @@ export function Header() {
           <span className="hidden md:inline">Deal Hunter</span>
         </Link>
         <nav className="flex items-center gap-1">
-          {sections.map(({ section, label, icon: Icon }) => {
+          {[...sections, ...(MODE_ONLY_SECTIONS[mode] ?? [])].map(({ section, label, icon: Icon }) => {
             const href = modePath(mode, section);
             const active = section === "" ? pathname === explorePath : pathname.startsWith(href);
             return (
