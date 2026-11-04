@@ -12,7 +12,7 @@ export interface FilteredR2RDeals {
   error: string | null;
   /**
    * `null` while loading. Once resolved, names the feed exactly — see
-   * `R2RSeedSource`. `rentcast` and `apartmentguide` are real listings;
+   * `R2RSeedSource`. `rentcast`, `mirror` and `apartmentguide` are real listings;
    * only `mock` is sample data.
    */
   source: R2RSeedSource | null;

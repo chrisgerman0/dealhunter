@@ -13,7 +13,7 @@ const GEO_MATCHES: GeoMatch[] = ["same_street", "radius_250m", "radius_500m", "r
  * its own live Airbnb comp set attached, from the first source that yields
  * rows: RentCast when `RENTCAST_API_KEY` is set, then the keyless
  * ApartmentGuide scrape, then the mock catalogue. `source` on the response
- * names which — `"rentcast" | "apartmentguide" | "mock"` — and the UI reads
+ * names which — `"rentcast" | "mirror" | "apartmentguide" | "mock"` — and the UI reads
  * differently for each so sample data can never pass as real.
  *
  * Returns raw seeds, not assembled deals — the client runs them through

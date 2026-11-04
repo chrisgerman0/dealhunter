@@ -464,7 +464,7 @@ export interface RentalListing {
  *
  * Produced by `getLiveR2RSeeds()` in `src/lib/r2r/live-deals.ts`.
  */
-export type R2RSeedSource = "rentcast" | "apartmentguide" | "mock";
+export type R2RSeedSource = "rentcast" | "mirror" | "apartmentguide" | "mock";
 
 export interface RentalListingDetail extends RentalListing {
   description: string;

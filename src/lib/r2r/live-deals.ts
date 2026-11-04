@@ -6,16 +6,32 @@
  * one of three values, never ambiguous:
  *
  *     "rentcast"       — the paid feed, used whenever RENTCAST_API_KEY is set
+ *     "mirror"         — mirrored Zillow / Realtor stock, when the mirror holds
+ *                        underwritable rows (src/lib/r2r/mirror-listings.ts)
  *     "apartmentguide" — the keyless live scrape (src/lib/r2r/apartmentguide.ts)
  *     "mock"           — the sample catalogue, last resort, always labelled
  *
  * PRECEDENCE, and why it is this way round
  * ----------------------------------------
  * RentCast first: it is a licensed API, so it carries no ToS risk and no
- * page-shape fragility. ApartmentGuide second: real listings today with no
- * key, at the cost of the ToS conflict documented at length in that file's
- * header. Mock last and only when both live paths come back empty — and in
- * that case `source` says `"mock"` and every UI surface says "sample data".
+ * page-shape fragility.
+ *
+ * The Zillow/Realtor mirror second, and above ApartmentGuide for a reason
+ * that is about the stock and not about the plumbing: R2R needs single-family
+ * homes and condos from private landlords, and ApartmentGuide inventory is
+ * overwhelmingly managed multifamily whose leases ban subletting. Measured on
+ * real payloads, `zillow.com/tampa-fl/rent-houses/` is 41/41 SINGLE_FAMILY
+ * while the equivalent ApartmentGuide page is almost entirely complexes. So
+ * when the mirror has stock it is strictly better stock. It ranks below
+ * RentCast anyway because RentCast is licensed and the mirror is a scrape.
+ *
+ * The mirror is skipped entirely when it holds nothing underwritable, so an
+ * empty mirror cannot shadow ApartmentGuide — and unlike the other two
+ * sources it serves from a store rather than fetching, so its rows are as
+ * fresh as the last scrape run and the response says so.
+ *
+ * Mock last and only when every live path comes back empty — and in that case
+ * `source` says `"mock"` and every UI surface says "sample data".
  *
  * A real scrape must never be able to present itself as mock, and mock must
  * never be able to present itself as real. That is the whole contract of
@@ -50,6 +66,13 @@ import {
   AG_SOURCE_LABEL,
   fetchApartmentGuideListings,
 } from "./apartmentguide";
+import {
+  describeRejections,
+  fetchMirroredListingsForMarket,
+  hasMirroredStock,
+  MIRROR_SOURCE_ID,
+  MIRROR_SOURCE_LABEL,
+} from "./mirror-listings";
 
 /* ------------------------------------------------------------------ *
  * The common listing interface
@@ -90,7 +113,7 @@ export interface LiveRentalListing {
   rentIsFromPrice?: boolean;
 }
 
-export type LiveListingSource = "rentcast" | typeof AG_SOURCE_ID;
+export type LiveListingSource = "rentcast" | typeof MIRROR_SOURCE_ID | typeof AG_SOURCE_ID;
 export type R2RSeedSource = LiveListingSource | "mock";
 
 /** Provenance strings for whichever feed produced a row. */
@@ -103,6 +126,7 @@ interface ProviderMeta {
 
 const PROVIDERS: Record<LiveListingSource, ProviderMeta> = {
   rentcast: { id: "rentcast", label: "RentCast", shortName: "RentCast" },
+  [MIRROR_SOURCE_ID]: { id: MIRROR_SOURCE_ID, label: MIRROR_SOURCE_LABEL, shortName: "Zillow/Realtor mirror" },
   [AG_SOURCE_ID]: { id: AG_SOURCE_ID, label: AG_SOURCE_LABEL, shortName: "ApartmentGuide" },
 };
 
@@ -369,6 +393,16 @@ async function fetchMarketListings(
     const listings = await fetchRentCastListings(market);
     return { listings, status: `${listings.length} live RentCast listing(s).` };
   }
+  if (source === MIRROR_SOURCE_ID) {
+    const { listings, rejections, totalForMarket } = await fetchMirroredListingsForMarket(market);
+    const excluded = describeRejections(rejections);
+    return {
+      listings,
+      status:
+        `${listings.length} underwritable mirrored listing(s) of ${totalForMarket} held for this market. ` +
+        (excluded ?? "Nothing excluded."),
+    };
+  }
   const scan = await fetchApartmentGuideListings(market);
   const capped = scan.totalFound > scan.listings.length;
   return {
@@ -455,9 +489,14 @@ export async function getLiveR2RSeeds(opts: {
   const markets = opts.markets?.length ? opts.markets : WORKABLE_MARKETS;
   const geoMatch = opts.geoMatch ?? "radius_500m";
 
-  const attempted: LiveListingSource[] = hasRentCastKey()
-    ? ["rentcast", AG_SOURCE_ID]
-    : [AG_SOURCE_ID];
+  // The mirror is only attempted when it actually holds underwritable stock,
+  // so an empty mirror costs nothing and never shadows ApartmentGuide.
+  const mirrorHasStock = await hasMirroredStock();
+  const attempted: LiveListingSource[] = [
+    ...(hasRentCastKey() ? (["rentcast"] as LiveListingSource[]) : []),
+    ...(mirrorHasStock ? ([MIRROR_SOURCE_ID] as LiveListingSource[]) : []),
+    AG_SOURCE_ID,
+  ];
 
   const combinedStatus: Record<string, string> = {};
 
@@ -474,6 +513,11 @@ export async function getLiveR2RSeeds(opts: {
       const note =
         source === "rentcast"
           ? `${live} live RentCast listing(s) across ${markets.length} market(s), each with a live Airbnb comp set.`
+          : source === MIRROR_SOURCE_ID
+          ? `${live} mirrored Zillow/Realtor listing(s) across ${markets.length} market(s), each with a live Airbnb comp set. ` +
+            `Scraped by Deal Hunter's own mirror and graded through the same engine as every other source. ` +
+            `Apartment-complex units are excluded — their leases prohibit subletting. ` +
+            `Rows are as fresh as the last scrape run, not as fresh as this request: check the data age on the Mirror page.`
           : `${live} live ApartmentGuide listing(s) across ${markets.length} market(s), each with a live Airbnb comp set. ` +
             `Keyless scrape — real listings, no API key. RentCast takes over automatically if RENTCAST_API_KEY is set. ` +
             `ApartmentGuide's robots.txt permits these city pages; its Terms of Service prohibit automated access — see ` +

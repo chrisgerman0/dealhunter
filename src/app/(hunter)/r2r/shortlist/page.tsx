@@ -35,7 +35,9 @@ export default function R2RShortlistPage() {
           <p className="mt-1 text-xs text-muted-foreground">
             {data.source === "rentcast"
               ? "Live RentCast listings — real units."
-              : data.source === "apartmentguide"
+              : data.source === "mirror"
+                ? "Mirrored Zillow / Realtor listings"
+                : data.source === "apartmentguide"
                 ? "Live ApartmentGuide listings — real units, scraped without an API key."
                 : data.source === "mock"
                   ? "Sample data — both live sources came back empty."

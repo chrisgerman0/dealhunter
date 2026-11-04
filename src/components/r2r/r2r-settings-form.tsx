@@ -28,14 +28,21 @@ function RentalSourceStatus() {
       </p>
     );
   }
-  if (data?.source === "rentcast" || data?.source === "apartmentguide") {
-    const isKeyed = data.source === "rentcast";
+  if (data?.source === "rentcast" || data?.source === "mirror" || data?.source === "apartmentguide") {
+    // Each live source gets its own name and its own kind-of-source badge.
+    // A shared "isKeyed ? A : B" ternary silently mislabels the third one.
+    const LIVE_LABELS = {
+      rentcast: { name: "RentCast", kind: "Licensed API" },
+      mirror: { name: "Zillow / Realtor mirror", kind: "Own scrape" },
+      apartmentguide: { name: "ApartmentGuide", kind: "Keyless scrape" },
+    } as const;
+    const meta = LIVE_LABELS[data.source];
     return (
       <div className="space-y-1 rounded-lg border border-emerald-300 bg-emerald-50/50 p-3">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm font-medium">{isKeyed ? "RentCast" : "ApartmentGuide"}</p>
+          <p className="text-sm font-medium">{meta.name}</p>
           <Badge className="border-transparent bg-emerald-600 text-white">Live</Badge>
-          <Badge variant="outline">{isKeyed ? "Licensed API" : "Keyless scrape"}</Badge>
+          <Badge variant="outline">{meta.kind}</Badge>
         </div>
         <p className="text-xs text-muted-foreground">{data.note}</p>
       </div>

@@ -35,7 +35,7 @@ function formatAge(iso: string | null): string | null {
  * sample one. Never let a card grid alone make that claim — see the BMV
  * incident this build exists to avoid.
  *
- * Three sources, three distinct banners. The rule: `rentcast` and
+ * Four sources, four distinct banners. The rule: `rentcast`, `mirror` and
  * `apartmentguide` are REAL listings and must never render the "sample data"
  * copy; `mock` is the only source permitted to claim real data is absent, and
  * it must always say so. Adding a fourth source means adding a branch here —
@@ -79,6 +79,14 @@ function DataSourceBanner({
       </div>
     );
   }
+  if (source === "mirror") {
+    return (
+      <div className="border-b border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-900">
+        Mirrored Zillow / Realtor listings — real units, scraped by Deal Hunter. Apartment complexes excluded
+        {fetched}. These are as fresh as the last scrape run — check data age on the Mirror page.
+      </div>
+    );
+  }
   if (source === "apartmentguide") {
     return (
       <div className="border-b border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-900">
@@ -89,7 +97,7 @@ function DataSourceBanner({
   if (source === "mock") {
     return (
       <div className="border-b border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-900">
-        Live feed not connected — showing sample data. Both live sources came back empty.
+        Live feed not connected — showing sample data. Every live source came back empty.
       </div>
     );
   }
