@@ -4,14 +4,18 @@ import { useMemo } from "react";
 import { assembleR2RDeal, assumptionsFromSettings } from "@/lib/r2r/assemble";
 import { useDealStore } from "@/store/useDealStore";
 import { useR2RSeeds } from "./useR2RSeeds";
-import type { R2RDeal } from "@/types/r2r";
+import type { R2RDeal, R2RSeedSource } from "@/types/r2r";
 
 export interface FilteredR2RDeals {
   deals: R2RDeal[];
   loading: boolean;
   error: string | null;
-  /** `null` while loading. `"rentcast"` or `"mock"` once resolved — never ambiguous. */
-  source: "rentcast" | "mock" | null;
+  /**
+   * `null` while loading. Once resolved, names the feed exactly — see
+   * `R2RSeedSource`. `rentcast` and `apartmentguide` are real listings;
+   * only `mock` is sample data.
+   */
+  source: R2RSeedSource | null;
   /** ISO timestamp the live data was fetched, or `null` for mock / not-yet-loaded. */
   dataAsOf: string | null;
   note: string;

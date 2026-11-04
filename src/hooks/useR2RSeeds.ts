@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import type { R2RSeed } from "@/lib/r2r/assemble";
+import type { R2RSeedSource } from "@/types/r2r";
 
 export interface R2RSeedsData {
   seeds: R2RSeed[];
-  source: "rentcast" | "mock";
+  source: R2RSeedSource;
   dataAsOf: string | null;
   note: string;
   marketStatus: Record<string, string>;

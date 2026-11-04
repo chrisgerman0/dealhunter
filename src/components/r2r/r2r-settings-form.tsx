@@ -28,24 +28,41 @@ function RentalSourceStatus() {
       </p>
     );
   }
-  if (data?.source === "rentcast") {
+  if (data?.source === "rentcast" || data?.source === "apartmentguide") {
+    const isKeyed = data.source === "rentcast";
     return (
       <div className="space-y-1 rounded-lg border border-emerald-300 bg-emerald-50/50 p-3">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm font-medium">RentCast</p>
+          <p className="text-sm font-medium">{isKeyed ? "RentCast" : "ApartmentGuide"}</p>
           <Badge className="border-transparent bg-emerald-600 text-white">Live</Badge>
+          <Badge variant="outline">{isKeyed ? "Licensed API" : "Keyless scrape"}</Badge>
         </div>
         <p className="text-xs text-muted-foreground">{data.note}</p>
+      </div>
+    );
+  }
+  if (data?.source === "mock") {
+    return (
+      <div className="space-y-1 rounded-lg border border-amber-300 bg-amber-50/50 p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm font-medium">Mock catalogue</p>
+          <Badge variant="outline">Fallback</Badge>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {data.note ?? "Both live listings sources came back empty."}
+        </p>
       </div>
     );
   }
   return (
     <div className="space-y-1 rounded-lg border border-amber-300 bg-amber-50/50 p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <p className="text-sm font-medium">Mock catalogue</p>
-        <Badge variant="outline">Fallback</Badge>
+        <p className="text-sm font-medium">Source not reported</p>
+        <Badge variant="outline">Unverified</Badge>
       </div>
-      <p className="text-xs text-muted-foreground">{data?.note ?? "RENTCAST_API_KEY not set."}</p>
+      <p className="text-xs text-muted-foreground">
+        {data?.note ?? "The seeds endpoint did not name a source — treat these figures as unverified."}
+      </p>
     </div>
   );
 }
@@ -311,17 +328,29 @@ export function R2RSettingsForm() {
         <div>
           <h2 className="text-sm font-medium text-muted-foreground">Rental listings source</h2>
           <p className="text-xs text-muted-foreground">
-            The units Deal Hunter can lease. This one needs a key — Realtor.com, Zillow and
-            Apartments.com all prohibit scraping in their ToS, so there is no free fallback for
-            this half of the data the way there is for comps.
+            The units Deal Hunter can lease. Two live sources, tried in order: RentCast when a key
+            is set, then a keyless ApartmentGuide scrape, then the mock catalogue as a labelled
+            last resort.
           </p>
         </div>
         <RentalSourceStatus />
         <p className="text-xs text-muted-foreground">
           Set <code className="font-mono">RENTCAST_API_KEY</code> (sign up at{" "}
           <code className="font-mono">developers.rentcast.io</code> — free tier 50 calls/mo,
-          dev/test only; $74/mo for 1,000) to go live. One call per market per day, cached hard
-          against that ceiling — see <code className="font-mono">src/lib/r2r/rentcast.ts</code>.
+          dev/test only; $74/mo for 1,000) to prefer the licensed API. One call per market per day,
+          cached hard against that ceiling — see{" "}
+          <code className="font-mono">src/lib/r2r/rentcast.ts</code>.
+        </p>
+        <p className="text-xs text-muted-foreground">
+          <strong>Keyless fallback, and its risk.</strong> ApartmentGuide needs no key and returns
+          real Florida units with exact ZIP and coordinates. Its{" "}
+          <code className="font-mono">robots.txt</code> permits the city pages this app reads, but
+          its Terms of Service prohibit automated access without written consent — an unresolved
+          conflict, flagged rather than buried. One request per market per 12 hours, no login, no
+          block circumvention. Zillow, Realtor.com, Apartments.com, HotPads, Rent.com and
+          Craigslist were all rejected — see{" "}
+          <code className="font-mono">src/lib/r2r/apartmentguide.ts</code> for each one&apos;s
+          measured response and the reasoning.
         </p>
       </section>
 

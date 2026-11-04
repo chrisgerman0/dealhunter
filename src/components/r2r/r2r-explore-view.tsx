@@ -4,6 +4,7 @@ import { R2RFilterPanel } from "@/components/r2r/r2r-filter-panel";
 import { R2RDealList } from "@/components/r2r/r2r-deal-list";
 import { R2RDealMap } from "@/components/r2r/r2r-deal-map";
 import { useFilteredR2RDeals } from "@/hooks/useFilteredR2RDeals";
+import type { R2RSeedSource } from "@/types/r2r";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { List, Map as MapIcon, SlidersHorizontal } from "lucide-react";
@@ -33,6 +34,14 @@ function formatAge(iso: string | null): string | null {
  * The one place that tells Chris whether he is looking at a real market or a
  * sample one. Never let a card grid alone make that claim — see the BMV
  * incident this build exists to avoid.
+ *
+ * Three sources, three distinct banners. The rule: `rentcast` and
+ * `apartmentguide` are REAL listings and must never render the "sample data"
+ * copy; `mock` is the only source permitted to claim real data is absent, and
+ * it must always say so. Adding a fourth source means adding a branch here —
+ * the `source === "mock"` test is deliberate rather than an `else`, so a new
+ * source shows up as the honest "unrecognised" state instead of silently
+ * inheriting the sample-data label.
  */
 function DataSourceBanner({
   loading,
@@ -42,7 +51,7 @@ function DataSourceBanner({
 }: {
   loading: boolean;
   error: string | null;
-  source: "rentcast" | "mock" | null;
+  source: R2RSeedSource | null;
   dataAsOf: string | null;
 }) {
   if (loading) {
@@ -59,17 +68,34 @@ function DataSourceBanner({
       </div>
     );
   }
+
+  const age = formatAge(dataAsOf);
+  const fetched = age ? ` · fetched ${age}` : "";
+
   if (source === "rentcast") {
-    const age = formatAge(dataAsOf);
     return (
       <div className="border-b border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-900">
-        Live RentCast listings{age ? ` · fetched ${age}` : ""}
+        Live RentCast listings — real units{fetched}
+      </div>
+    );
+  }
+  if (source === "apartmentguide") {
+    return (
+      <div className="border-b border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-900">
+        Live ApartmentGuide listings — real units, scraped without an API key{fetched}
+      </div>
+    );
+  }
+  if (source === "mock") {
+    return (
+      <div className="border-b border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-900">
+        Live feed not connected — showing sample data. Both live sources came back empty.
       </div>
     );
   }
   return (
     <div className="border-b border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-900">
-      Live feed not connected — showing sample data. Set RENTCAST_API_KEY to go live.
+      Data source not reported by the feed — treat these figures as unverified.
     </div>
   );
 }
