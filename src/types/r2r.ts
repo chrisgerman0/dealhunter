@@ -454,6 +454,18 @@ export interface RentalListing {
   pool?: boolean;
 }
 
+/**
+ * Which feed produced the rows currently on screen.
+ *
+ * Three values, never ambiguous, and the UI must read differently for each:
+ * `rentcast` and `apartmentguide` are REAL listings; `mock` is the sample
+ * catalogue and is the only one allowed to say "sample data". A real scrape
+ * labelled as mock is as much a defect as mock labelled as real.
+ *
+ * Produced by `getLiveR2RSeeds()` in `src/lib/r2r/live-deals.ts`.
+ */
+export type R2RSeedSource = "rentcast" | "apartmentguide" | "mock";
+
 export interface RentalListingDetail extends RentalListing {
   description: string;
   listingUrl: string;

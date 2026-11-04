@@ -9,11 +9,19 @@ export const maxDuration = 30;
 const GEO_MATCHES: GeoMatch[] = ["same_street", "radius_250m", "radius_500m", "radius_1km"];
 
 /**
- * R2R's one data endpoint: live RentCast listings (each with its own live
- * Airbnb comp set attached) when `RENTCAST_API_KEY` is set, the mock
- * catalogue otherwise. Returns raw seeds, not assembled deals — the client
- * runs them through `assembleR2RDeal()` with the user's own settings, the
- * same function the mock catalogue has always used.
+ * R2R's one data endpoint. Returns real long-term rental listings, each with
+ * its own live Airbnb comp set attached, from the first source that yields
+ * rows: RentCast when `RENTCAST_API_KEY` is set, then the keyless
+ * ApartmentGuide scrape, then the mock catalogue. `source` on the response
+ * names which — `"rentcast" | "apartmentguide" | "mock"` — and the UI reads
+ * differently for each so sample data can never pass as real.
+ *
+ * Returns raw seeds, not assembled deals — the client runs them through
+ * `assembleR2RDeal()` with the user's own settings, the same function the
+ * mock catalogue has always used.
+ *
+ * `maxDuration` is 30 s and `getLiveR2RSeeds()` works to a 22 s internal
+ * budget, returning whatever markets finished rather than timing out whole.
  */
 export async function GET(request: Request) {
   const url = new URL(request.url);
